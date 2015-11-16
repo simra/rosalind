@@ -211,7 +211,74 @@ getData "subs"
 |> printfn "%s"
 
 // 11. CONS Consensus and profile
+#r @"c:\GitHub\rosalind\packages\MathNet.Numerics.3.8.0\lib\net40\MathNet.Numerics.dll"
+#r @"c:\GitHub\rosalind\packages\MathNet.Numerics.FSharp.3.8.0\lib\net40\MathNet.Numerics.FSharp.dll"
+open MathNet.Numerics.LinearAlgebra
 
+type ProfileMatrix = 
+    Map<char,MathNet.Numerics.LinearAlgebra.Vector<double>>
+let addProfiles p1 p2 = 
+    let keys=
+        [Map.toSeq p1 ;Map.toSeq p2]
+        |> Seq.concat
+        |> Seq.map (fun (k,v) ->k)
+        |> Set.ofSeq
+    keys
+    |> Seq.fold 
+        (fun s k -> 
+            if Map.containsKey k p1 then
+                if Map.containsKey k p2 then
+                    s|>Map.add k (p1.[k]+p2.[k])
+                else
+                    s|>Map.add k p1.[k]
+            else
+                s|>Map.add k p2.[k])
+            Map.empty
+
+let consensus (p:ProfileMatrix) =
+    let len = p|>Map.toSeq |> Seq.take 1 |> Seq.exactlyOne |> fun kvp ->p.[fst kvp].Count
+    [0..len-1]
+    |> Seq.map (fun i -> 
+                ['A';'C';'G';'T']
+                |> Seq.maxBy (fun c -> p.[c].[i])
+                )
+    |> Seq.map string
+    |> String.concat ""
+
+let printProfVector (v:Vector<double>) =
+    v.ToArray()
+    |> Seq.map string
+    |> String.concat " "
+
+let printProfMtx (p:ProfileMatrix) =
+    ['A';'C';'G';'T']
+    |> Seq.iter (fun c->printfn "%c: %s" c (printProfVector p.[c]))
+
+let V = Vector<double>.Build
+let oneAt len i = V.Dense(len, fun _i -> if _i=i then 1. else 0.)
+let makeProfile (f:FASTA) =
+    let len = f.String.Length
+    let initState=
+        ['A';'C';'G';'T']
+        |> Seq.map (fun k -> (k,V.Dense(len)))
+        |> Map.ofSeq
+    [0..len-1]
+    |>Seq.fold 
+        (fun s i -> 
+            let c=f.String.[i]
+            Map.empty|>Map.add c (oneAt len i)
+            |>addProfiles s
+            ) initState
+
+
+getData "cons"
+|> fun x -> x.Trim()
+|> parseFasta
+|> Seq.map makeProfile
+|> Seq.reduce addProfiles
+|> fun p -> 
+    printfn "%s" (consensus p)
+    printProfMtx p
 
 [<EntryPoint>]
 let main argv = 
