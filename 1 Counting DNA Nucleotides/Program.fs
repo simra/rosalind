@@ -227,14 +227,24 @@ let pDom k m n =
 // n: num homozygous recessive
 
 // 9. PROT Translating RNA into Protein
+open System
+open System.IO
+
 let chop segmentSize source =
-    source
+    source    
     |> Seq.unfold(fun chopSource ->
         if Seq.isEmpty chopSource then None else
         let segment = chopSource |> Seq.truncate segmentSize
         let rest = chopSource |> Seq.skip (Seq.length segment)
         Some(segment, rest)
     )
+
+let chopStr segmentsize (source:string) =
+    seq {
+        for i in [0..segmentsize..source.Length-1] do
+            yield source.Substring(i,segmentsize)
+    }
+
 let decoder =
     @"UUU F      CUU L      AUU I      GUU V
 UUC F      CUC L      AUC I      GUC V
@@ -257,15 +267,13 @@ UGG W      CGG R      AGG R      GGG G".Split([|' ';'\n';'\r'|],StringSplitOptio
     |> Map.ofSeq
            
 let decode (s:string) =
-    chop 3 s
-    |> Seq.map string
-    |> Seq.map (String.concat "")
+    chopStr 3 s
+    |> Seq.map (fun x -> x|> Seq.map string|>String.concat "")    
     |> Seq.map (fun x -> decoder.[x])
     |> Seq.takeWhile (fun x -> x<>"Stop")
     |> String.concat ""
             
-
-    
+File.ReadAllText(@"C:\users\rsim\downloads\rosalind_prot.txt") |> decode|>printfn "%s"    ;;
 
 [<EntryPoint>]
 let main argv = 
