@@ -280,6 +280,23 @@ getData "cons"
     printfn "%s" (consensus p)
     printProfMtx p
 
+// finds all elements v of V such that v ends with the prefix of f up to length k 
+let Ok k V f =
+    let str=f.String;
+    let prefix=str.Substring(0,k)
+    V
+    |> Seq.filter (fun v -> v.Label<>f.Label && v.String.EndsWith(prefix))
+    |> Seq.map (fun v -> v,f)
+
+//11. GRPH
+getData "grph"
+|> fun x -> x.Trim()
+|> parseFasta
+|> fun V -> Seq.map (Ok 3 V) V
+|> Seq.concat
+|> Seq.iter (fun (v,f)-> printfn "%s %s" v.Label f.Label)
+
+
 [<EntryPoint>]
 let main argv = 
     File.ReadAllText(argv.[0])
