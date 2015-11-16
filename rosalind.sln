@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
 VisualStudioVersion = 12.0.40629.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "1 Counting DNA Nucleotides", "1 Counting DNA Nucleotides\1 Counting DNA Nucleotides.fsproj", "{8E607D44-C8B7-4BD7-8DCC-9F74CF45C91B}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "1_DNA", "1_DNA\1_DNA.fsproj", "{8E607D44-C8B7-4BD7-8DCC-9F74CF45C91B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
