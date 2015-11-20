@@ -121,7 +121,19 @@ let rec partFact (n:int64) (stop:int64) =
     else n*(partFact (n-1L) stop)
 
 let rec fact (n:int64) = partFact n 1L 
-let C n k = (partFact n (n-k))/(fact k) // todo: check n-k>k
+//let C n k = (partFact n (n-k))/(fact k) // blows up for k>=67
+// https://en.wikipedia.org/wiki/Binomial_coefficient#Recursive_formula
+// too expensive.
+(*let rec C n k = 
+    if k=0L || k=n then 1L
+    else (C (n-1L) (k-1L)) + (C (n-1L) k)*)
+// https://en.wikipedia.org/wiki/Binomial_coefficient#Multiplicative_formula
+let rec C n k =
+    if k>(n/2L+1L) then C n (n-k+1L)
+    else 
+        [1L..k]
+        |> Seq.map (fun i -> (n+1L-i)/(i))
+        |> Seq.reduce (*)
 
 let pDom k m n =
     let kk = float (C k 2L)
@@ -211,8 +223,10 @@ getData "subs"
 |> printfn "%s"
 
 // 11. CONS Consensus and profile
+#if INTERACTIVE
 #r @"c:\GitHub\rosalind\packages\MathNet.Numerics.3.8.0\lib\net40\MathNet.Numerics.dll"
 #r @"c:\GitHub\rosalind\packages\MathNet.Numerics.FSharp.3.8.0\lib\net40\MathNet.Numerics.FSharp.dll"
+#endif
 open MathNet.Numerics.LinearAlgebra
 
 type ProfileMatrix = 
@@ -296,6 +310,157 @@ getData "grph"
 |> Seq.concat
 |> Seq.iter (fun (v,f)-> printfn "%s %s" v.Label f.Label)
 
+
+// 12. LCSM. Finding a shared motif.  
+// Wherein impatience gets the better of me and I go for the brute force solution.  Strings are guaranteed to be less than 1kbp.
+// My first attempt built sets from every enumerated substring of every string but it was too expensive, so I enumerate just the first string
+// and then pare down the set as I check for containment in each of the subsequent strings.
+// The 'right' way to do this is with a generalized suffix tree, but the expense of implementing one seemed too high.  Laziness is the programmer's virtue.
+
+let enumerateSubstrings (s:string) =
+    seq {
+        for i in [0..s.Length-1] do
+            for j in [1..s.Length-i] do
+                yield s.Substring(i,j)
+    }
+let substrSet s = enumerateSubstrings s |> Set.ofSeq
+
+let intersectWithString (s:string) (ix:Set<string>) =
+    Set.toSeq ix
+    |> Seq.filter (fun s' -> s.Contains(s'))
+    |> Set.ofSeq
+
+getData "lcsm"
+|> fun x -> x.Trim()
+|> parseFasta
+|> List.ofSeq
+|> fun x -> 
+    match x with 
+    | [] -> []
+    | head :: tail ->
+        Seq.fold (fun ix s -> intersectWithString s.String ix) (substrSet head.String) tail
+        |> Set.toList    
+|> List.maxBy (fun x -> x.Length)
+|> printfn "%s"
+
+// 13. LIA 
+// at least N in k generations.
+// This works out to at least N successes in 2^k Bernoulli trials with success probability 0.5^k.
+// Incorrect because heterozygzy can happen from other combinations.  We need to build out the full tables.
+open System
+type Allele = char
+type Gene = string
+let combineAlleles a1 a2 : string =    
+    if Char.ToUpper(a1)=a1 then
+        sprintf "%c%c" a1 a2
+    else
+        sprintf "%c%c" a2 a1
+
+let combineGenes (g1:Gene,p1:float) (g2:Gene,p2:float) : seq<string*float> = // yields the punnet square probabilities for a combination of genes
+    seq {
+        for a1 in g1 do
+            for a2 in g2 do
+                yield (combineAlleles a1 a2, p1*p2/4.0)
+    }
+    |> Seq.groupBy (fun (g,p)->g)
+    |> Seq.map (fun (g,c)->g,c|>Seq.sumBy(fun (g',p')->p' ))
+
+let combineGenes2 (gs1:seq<Gene*float>) (gs2:seq<Gene*float>) =
+    seq {
+        for g1 in gs1 do
+            for g2 in gs2 do
+                yield combineGenes g1 g2
+    }
+    |> Seq.concat
+    |> Seq.groupBy (fun (g,p)->g)
+    |> Seq.map (fun (g,c)->g,c|>Seq.sumBy(fun (g',p')->p' ))
+
+type Genome = Map<string,seq<string*float>> // just a list of genes with probabilities.
+let makeGenome (strs:string seq) (ps:float seq) : Genome =
+    Seq.zip strs ps
+    |> Seq.map (fun (s,p)->Char.ToUpper(s.[0])|>string,[s,p]|>List.toSeq)
+    |> Map.ofSeq
+    
+
+let mateGenomes (g1:Genome) (g2:Genome) =
+    let keys m = Map.toSeq m|> Seq.map (fun (k,v)->k)|> List.ofSeq|>Set.ofList
+    let g1keys=keys g1
+    let g2keys=keys g2
+    let allkeys = Set.union g1keys g2keys
+    allkeys
+    |> Set.toSeq
+    |> Seq.map (fun k -> k,combineGenes2 (g1.[k]) (g2.[k]))
+    |> Map.ofSeq
+
+(* tool around with these functions for a bit and see how they interact. 
+let g1=makeGenome ["Xx";"Yy"] [1.0;1.0];;
+
+val g1 : Genome = map [("X", [("Xx", 1.0)]); ("Y", [("Yy", 1.0)])]
+
+> mateGenomes g1 g1;;
+val it : seq<string * seq<string * float>> =
+  seq
+    [("X", seq [("XX", 0.25); ("Xx", 0.5); ("xx", 0.25)]);
+     ("Y", seq [("YY", 0.25); ("Yy", 0.5); ("yy", 0.25)])]
+
+> let g2=mateGenomes g1 g1;;
+
+val g2 : Map<string,seq<string * float>> = map [("X", <seq>); ("Y", <seq>)]
+
+> mateGenomes g1 g2;;
+val it : Map<string,seq<string * float>> =
+  map
+    [("X", seq [("XX", 0.25); ("Xx", 0.5); ("xx", 0.25)]);
+     ("Y", seq [("YY", 0.25); ("Yy", 0.5); ("yy", 0.25)])]
+> let g3=mateGenomes g1 g2;;
+
+val g3 : Map<string,seq<string * float>> = map [("X", <seq>); ("Y", <seq>)]
+
+> mateGenomes g3 g1;;
+val it : Map<string,seq<string * float>> =
+  map
+    [("X", seq [("XX", 0.25); ("Xx", 0.5); ("xx", 0.25)]);
+     ("Y", seq [("YY", 0.25); ("Yy", 0.5); ("yy", 0.25)])]
+
+The key observation is "Xx" and "Yy" always have 0.5 probability (so, jointly they have 0.25 probability).
+
+Now the problem is just one of the likelihood of producing >34 heads in 128 bernoulli trials, where p(success)=0.25
+
+*)
+
+
+// Blows up. Argh      
+let binomOld (p:float) n k = 
+    let cnk=(C n k)|>float
+    printfn "%f %d %d %f" p n k cnk    
+    let k' = float k
+    let n' = float n
+    cnk*(p**k')*((1.-p)**(n'-k'))
+
+let N u s x =
+    let coeff=1./(s*sqrt 2.*Math.PI)
+    let arg = (x-u)**2./(2.*s**2.)
+    coeff * exp (-arg)
+//https://en.wikipedia.org/wiki/Binomial_distribution#Normal_approximation
+let binom (p:float) (n:int64) (k:int64) =   
+    //printfn "%f %f %f" p n k
+    N (float n*p) (float n*p*(1.-p)) (float k)
+    
+
+let probHeteroAtLeastN (p:float) (k:int64) (N:int64) = // p(genome) after k generations. 
+    let k' = float k    
+    //let p=0.25    
+    let n=2.**k'|>int64
+    let bnm = binom p n
+    [N..(int64 (2.**k'))]
+    |> Seq.map (fun i -> i |> bnm)
+    |> Seq.sum
+
+getData "lia"
+|> fun x -> x.Split(' ')
+|> fun t -> probHeteroAtLeastN 0.25 (Int64.Parse(t.[0])) (Int64.Parse(t.[1]))
+|> printfn "%f"
+    
 
 [<EntryPoint>]
 let main argv = 
