@@ -310,6 +310,22 @@ getData "grph"
 |> Seq.concat
 |> Seq.iter (fun (v,f)-> printfn "%s %s" v.Label f.Label)
 
+// 12. IEV: expected offspring
+// we only need the probs but for troubleshooting include the names
+let pTable = 
+    [| "AA-AA",1.0; "AA-Aa",1.0; "AA-aa",1.0; "Aa-Aa",0.75; "Aa-aa",0.5; "aa-aa",0.0|]
+    |> Array.map (fun (k,v)->v)
+
+let ievdata = 
+    getData "iev"
+    |> fun x->x.Split([|' '|],StringSplitOptions.RemoveEmptyEntries)
+    |> Seq.map (Double.Parse)
+    |> Array.ofSeq
+ievdata
+|> Seq.map2 (*) pTable
+|> Seq.sum
+|> (*) 2.0
+|> printfn "%f"
 
 // 12. LCSM. Finding a shared motif.  
 // Wherein impatience gets the better of me and I go for the brute force solution.  Strings are guaranteed to be less than 1kbp.
