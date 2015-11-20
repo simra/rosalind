@@ -129,10 +129,11 @@ let rec fact (n:int64) = partFact n 1L
     else (C (n-1L) (k-1L)) + (C (n-1L) k)*)
 // https://en.wikipedia.org/wiki/Binomial_coefficient#Multiplicative_formula
 let rec C n k =
-    if k>(n/2L+1L) then C n (n-k+1L)
+    if k=0L || k=n then 1L
+    else if k>=(n/2L+1L) then C n (n-k+1L)
     else 
         [1L..k]
-        |> Seq.map (fun i -> (n+1L-i)/(i))
+        |> Seq.map (fun i -> (n-k+i)/(i))
         |> Seq.reduce (*)
 
 let pDom k m n =
@@ -327,7 +328,7 @@ ievdata
 |> (*) 2.0
 |> printfn "%f"
 
-// 12. LCSM. Finding a shared motif.  
+// 13. LCSM. Finding a shared motif.  
 // Wherein impatience gets the better of me and I go for the brute force solution.  Strings are guaranteed to be less than 1kbp.
 // My first attempt built sets from every enumerated substring of every string but it was too expensive, so I enumerate just the first string
 // and then pare down the set as I check for containment in each of the subsequent strings.
@@ -359,10 +360,9 @@ getData "lcsm"
 |> List.maxBy (fun x -> x.Length)
 |> printfn "%s"
 
-// 13. LIA 
+// 14. LIA 
 // at least N in k generations.
-// This works out to at least N successes in 2^k Bernoulli trials with success probability 0.5^k.
-// Incorrect because heterozygzy can happen from other combinations.  We need to build out the full tables.
+// This works out to at least N successes in 2^k Bernoulli trials with success probability 0.25.
 open System
 type Allele = char
 type Gene = string
@@ -440,7 +440,7 @@ val it : Map<string,seq<string * float>> =
 
 The key observation is "Xx" and "Yy" always have 0.5 probability (so, jointly they have 0.25 probability).
 
-Now the problem is just one of the likelihood of producing >34 heads in 128 bernoulli trials, where p(success)=0.25
+Now the problem is just one of the likelihood of producing >=34 heads in 128 bernoulli trials, where p(success)=0.25
 
 *)
 
@@ -460,8 +460,10 @@ let N u s x =
 //https://en.wikipedia.org/wiki/Binomial_distribution#Normal_approximation
 let binom (p:float) (n:int64) (k:int64) =   
     //printfn "%f %f %f" p n k
-    N (float n*p) (float n*p*(1.-p)) (float k)
-    
+    if (float n*p>=10. && float n*p*(1.-p)>=10.) then
+        N (float n*p) (float n*p*(1.-p)) (float k)
+    else
+        float (C n k)*(p**(float k))*((1.0-p)**float (n-k))
 
 let probHeteroAtLeastN (p:float) (k:int64) (N:int64) = // p(genome) after k generations. 
     let k' = float k    
