@@ -128,13 +128,15 @@ let rec fact (n:int64) = partFact n 1L
     if k=0L || k=n then 1L
     else (C (n-1L) (k-1L)) + (C (n-1L) k)*)
 // https://en.wikipedia.org/wiki/Binomial_coefficient#Multiplicative_formula
+// This was actually incorrect on the wikipedia page and I had to make an edit!
 let rec C n k =
     if k=0L || k=n then 1L
-    else if k>=(n/2L+1L) then C n (n-k+1L)
+    else if k>=(n/2L+1L) then C n (n-k)
     else 
         [1L..k]
-        |> Seq.map (fun i -> (n-k+i)/(i))
+        |> Seq.map (fun i -> (float (n-k+i))/(float i))
         |> Seq.reduce (*)
+        |> int64
 
 let pDom k m n =
     let kk = float (C k 2L)
@@ -478,7 +480,44 @@ getData "lia"
 |> fun x -> x.Split(' ')
 |> fun t -> probHeteroAtLeastN 0.25 (Int64.Parse(t.[0])) (Int64.Parse(t.[1]))
 |> printfn "%f"
+
+// 14. MPRT
+#if INTERACTIVE
+#r @"C:\GitHub\rosalind\packages\Http.fs.1.5.1\lib\net40\HttpClient.dll"
+#endif
+open HttpClient   
+open System.Text.RegularExpressions
+
+let fetchSequence id =  
+    createRequest Get (sprintf "http://www.uniprot.org/uniprot/%s.fasta" id) 
+    |> getResponseBody
+    |> parseFasta
+    |> Seq.take 1
+    |> (fun s -> id,Seq.exactlyOne s)
+
+// todo: proper regex translation
+//let parseMotif str =
+
+// Needs help with overlapping regexes. see: http://stackoverflow.com/questions/320448/overlapping-matches-in-regex
+let nglycosylation = new Regex("N[^P][S|T][^P]")
+let matchLocations (rex:Regex) (str:string) =
+    let matches=rex.Matches(str)
+    seq { for m in matches do yield (m.Index+1) }
     
+
+
+getData "mprt"
+|> (fun x-> x.Trim().Split([|'\n';'\r'|],StringSplitOptions.RemoveEmptyEntries))
+|> Seq.map fetchSequence
+|> Seq.map (fun (id,f)-> id,matchLocations nglycosylation f.String)
+|> Seq.iter 
+    (fun (f,s)->
+        if Seq.isEmpty s then ()
+        else
+            printfn "%s\n%s" f (s|>Seq.map string|>String.concat " ")
+    )
+
+       
 
 [<EntryPoint>]
 let main argv = 
