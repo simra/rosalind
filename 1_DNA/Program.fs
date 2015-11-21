@@ -482,6 +482,7 @@ getData "lia"
 |> printfn "%f"
 
 // 14. MPRT
+// Failed on the first attempt- maybe a copy-paste or download failure?
 #if INTERACTIVE
 #r @"C:\GitHub\rosalind\packages\Http.fs.1.5.1\lib\net40\HttpClient.dll"
 #endif
@@ -496,14 +497,20 @@ let fetchSequence id =
     |> (fun s -> id,Seq.exactlyOne s)
 
 // todo: proper regex translation
-//let parseMotif str =
-
 // Needs help with overlapping regexes. see: http://stackoverflow.com/questions/320448/overlapping-matches-in-regex
 let nglycosylation = new Regex("N[^P][S|T][^P]")
 let matchLocations (rex:Regex) (str:string) =
-    let matches=rex.Matches(str)
-    seq { for m in matches do yield (m.Index+1) }
-    
+    Seq.unfold 
+        (fun (ix) -> 
+            if ix>=str.Length then // todo: check length.
+                None
+            else 
+                let m = nglycosylation.Match(str,ix) 
+                if (m.Success) then
+                    Some (m.Index+1,m.Index+1)
+                else None) 0
+    //let matches=rex.Matches(str)
+    //seq { for m in matches do yield (m.Index+1) }
 
 
 getData "mprt"
@@ -517,7 +524,136 @@ getData "mprt"
             printfn "%s\n%s" f (s|>Seq.map string|>String.concat " ")
     )
 
-       
+// 15. MRNA
+// Explode protein string to count possible RNA strings.  Basically walk along 
+let encoder =
+    decoder
+    |> Map.toSeq
+    |> Seq.groupBy (fun (x,y)-> y)
+    |> Seq.map (fun (y,s)->(y,Seq.length s))
+    |> Map.ofSeq
+
+getData "mrna"
+|> fun x->x.Trim()
+|> Seq.fold (fun (s:int) (c:char) -> (s*encoder.[string c])%1000000) 1
+|> (*) encoder.["Stop"]
+|> fun x-> x%1000000
+|> printfn "%d"
+
+type ParseState = 
+    INIT of string list
+    |PARSING of (string list)*(string list)
+    
+// would unfold work better here?
+let parseNext (str:string,i:int,m:Map<int,ParseState>) c =
+    //eprintfn "%A" (str,i,m)
+    let mapstate=m.[i%3]
+    if (i>=str.Length-3) then
+        (str,i+1,m)
+    else
+        let workingStr = str.Substring(i,3)
+        match mapstate with
+        | INIT(l) -> 
+            if workingStr="AUG" then
+                (str,i+1,m|>Map.add (i%3) (PARSING([decoder.[workingStr]],l)))
+            else
+                (str,i+1,m)
+        | PARSING(s,l) ->
+            if decoder.[workingStr]="Stop" then  // found the stop codon
+                (str,i+1,m|>Map.add (i%3) (INIT([s;l]|>List.concat)))
+            else
+                let c=decoder.[workingStr]                    
+                let sOut=s|>List.map (fun x->x+c)
+                if workingStr="AUG" then // found another start codon. Add another parse string.
+                    (str,i+1,m|>Map.add (i%3) (PARSING(c::sOut,l)))
+                else
+                    (str,i+1,m|>Map.add (i%3) (PARSING(sOut,l)))
+
+let parseProteins (str:string) =
+    Seq.fold parseNext (str,0,Map.ofList [0,INIT([]);1,INIT([]);2,INIT([])]) str
+    |> fun (_,_,m) -> m
+    |> Map.toSeq
+    |> Seq.map 
+        (fun (ix,p) ->
+            match p with
+            | INIT(l) -> l
+            | PARSING(s,l) -> [l]|>List.concat // was [s;l]
+            )
+    |> List.concat   
+  
+
+
+getData "orf"
+|> fun x->x.Trim()
+|> parseFasta
+|> Seq.exactlyOne
+|> fun x -> x.String
+|> fun x->    
+    [
+        x|>dnaToRna |> parseProteins
+        x|> reverseComplement |> dnaToRna |> parseProteins
+    ]
+|> Seq.concat
+|> Seq.groupBy id
+|> Seq.map (fun (x,_)->x)
+|> Seq.iter (printfn "%s")
+
+// perm
+// stolen shamelessly from 
+// 1. http://stackoverflow.com/questions/1526046/f-permutations 
+// which was copied from p 166-167 of 
+// 2. http://www.ffconsultancy.com/products/fsharp_for_technical_computing/?so
+// which now I think I should buy...
+let rec distribute e = function
+  | [] -> [[e]]
+  | x::xs' as xs -> (e::xs)::[for xs in distribute e xs' -> x::xs]
+
+let rec permute = function
+  | [] -> [[]]
+  | e::xs -> List.collect (distribute e) (permute xs)
+
+let perm n =
+    printfn "%d" (fact n)
+    [1L..n]
+    |> permute
+    |> Seq.map (fun x-> x|>Seq.map string|>String.concat " ")
+    |> Seq.iter (printfn "%s")
+
+// prtm
+let monomasstbl = 
+    "A   71.03711
+C   103.00919
+D   115.02694
+E   129.04259
+F   147.06841
+G   57.02146
+H   137.05891
+I   113.08406
+K   128.09496
+L   113.08406
+M   131.04049
+N   114.04293
+P   97.05276
+Q   128.05858
+R   156.10111
+S   87.03203
+T   101.04768
+V   99.06841
+W   186.07931
+Y   163.06333"
+    |> fun x->x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
+    |> Seq.map (fun x-> x.Split([|' '|],StringSplitOptions.RemoveEmptyEntries))
+    |> Seq.map (fun toks-> (toks.[0],Double.Parse(toks.[1])))
+    |> Map.ofSeq
+
+let monomass str =
+    str
+    |> Seq.map (fun c-> monomasstbl.[string c])
+    |> Seq.sum
+
+printfn "%f" (monomass "SKADYEK")      
+
+printfn "%f" (monomass "FRKYGVCLEKERMHQAKFGNLQYPLSMLTWKHDIPTTMDRTMIIKQAATDMCDYGNTSYVHVGASWDIMNRETKHVYVFFSVTQVINDNNDAHWNDVGHVLEWPAKRYCQHTQHWCEAHCMPEAMSHHAITWHTDHNHNFTHHCGQGTSFICEFAQGNNLEGHVDFHRIAELARTIMPGYNDCENDKEHCPPWPWFINRTLMDTWWVNVIREFKYEAIRMLFPQKMYWHMNCRCHPKGTYRIHKLPQHGHMSYKRMGDMGIEILTIEEPWTNGIWCVQDEPDEIIIMMGCMAPPYTQQDPECFEDAKWCFWQRQRNTVHVGRMTKVFNNMVMIHQIRHCFHFIPDGLGDAPLAVYVNETEPANVKGGSKTMPVPPFTHSRCSALAHRTLQNTHTAEWASWDARARFVCEWHRVPNRFCGHNYGQMGPLHHRVFNNTEMHRVTDQKVVNYPETSQTFKFCWGETHCMNFGQCLSPEGVICHFALPSYEICSGRFMDYKVGAVVPDMHFAAVYKWKDCGFWNCQMRYRPRTKYVAEDWFAVPWRMASVVLPHRINTIVCWALGDHEVQNQLDRCIFRGTNQCAPIAGDQWFGNHKHTWPKSHTVNVQMVGIGEGVESILYLSTILSEPFGFIQSMMVPHPVVVPWTCAMNCLAYEYQIVEGIPWKPCGCYNCIWPTKNGLQYAGAATQTMVRDEMAQFCFTYPHWIKGFYGVKKQNPHSTRMVLRGFNMSQRLEGCTVAYYPCESEEFVHHYHAFNCPMWDWWMTTWHDDYKMLCLTHAHRCCFRTTTFQWAVYILQWQDQMNANQLSPEKMWSPTAPVYHQLREVLRMGGCFYAYTPFPGPHIDHLAYVETQCYH")
 
 [<EntryPoint>]
 let main argv = 
