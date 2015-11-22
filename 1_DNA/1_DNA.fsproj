@@ -66,7 +66,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="HttpClient">
-      <HintPath>..\packages\Http.fs.1.5.1\lib\net40\HttpClient.dll</HintPath>
+      <HintPath>C:\GitHub\rosalind\packages\Http.fs.1.5.1\lib\net40\HttpClient.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="MathNet.Numerics">

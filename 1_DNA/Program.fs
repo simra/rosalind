@@ -548,7 +548,7 @@ type ParseState =
 let parseNext (str:string,i:int,m:Map<int,ParseState>) c =
     //eprintfn "%A" (str,i,m)
     let mapstate=m.[i%3]
-    if (i>=str.Length-3) then
+    if (i>str.Length-3) then
         (str,i+1,m)
     else
         let workingStr = str.Substring(i,3)
@@ -678,6 +678,71 @@ getData "revp"
 
 
 // splc
+let splice (dnastr:FASTA) (introns:FASTA list) =
+    introns
+    |> Seq.fold (fun (s:string) (i:FASTA) -> s.Replace(i.String,"")) dnastr.String
+    
+// According to rosalind there should be only one solution but parseProteins returns several.  I took the longest.
+getData "splc"
+|> fun x -> x.Trim()
+|> parseFasta
+|> List.ofSeq
+|> fun l -> 
+    match l with 
+    | head::tail -> splice head tail
+    | _ -> ""
+|> dnaToRna
+|> parseProteins
+|> Seq.iter (printfn "%s")
+
+// lexf
+// should have written this a long time ago:
+let splitNewline (x:string) = x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
+getData "lexf"
+|> splitNewline
+|> fun toks -> (toks.[0].Split(' ')|>Array.toSeq,Int32.Parse(toks.[1]))
+|> fun (alphabet:seq<string>,strlen:int) ->
+    let rec addChar (i:int) (s:string) : seq<string> =
+        if i=0 then
+            seq {yield s}
+        else
+            seq {               
+                for a in alphabet do
+                    yield! (s+a)|>addChar (i-1)
+            }
+    addChar strlen ""
+|> Seq.iter (printfn "%s")
+
+// lgis. unfinished.
+let longestSubsequence cmp s =
+    Seq.fold (fun (sequences:list<list<int>>) (elem:int) ->
+                sequences
+                |> List.map 
+                    (fun si ->
+                        match si with
+                        | head :: tail -> 
+                            if cmp elem head then
+                                elem::si
+                            else
+                                si
+                        | [] -> []
+                    )
+                |> fun l -> [elem]::l
+                ) 
+                [] s
+    |> List.maxBy (fun s -> List.length s)
+    |> List.rev // needs reversing when done.
+
+getData "lgis"
+|> splitNewline
+|> fun toks -> toks.[1]
+|> fun x -> x.Split(' ')
+|> Array.map (fun x -> Int32.Parse(x))
+|> fun x -> x,longestSubsequence (>) x
+//|> fun (x,l1) -> (x,l1,longestSubsequence (<) x)
+|> fun (x,l1,l2) ->
+    printfn "%s" (l1|>List.map string|> String.concat " ")
+    printfn "%s" (l2|>List.map string|> String.concat " ")
 
 [<EntryPoint>]
 let main argv = 
