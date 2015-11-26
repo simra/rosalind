@@ -7,6 +7,7 @@ let (@@) folder filename = Path.Combine(folder,filename)
 let data_root = @"c:\GitHub\rosalind\data"
 let getData s = 
     File.ReadAllText(data_root@@(sprintf "rosalind_%s_1_dataset.txt" s)) |> fun x -> x.Trim()
+let splitNewline (x:string) = x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
 
 // 1. DNA
 let guard m c =
@@ -696,8 +697,6 @@ getData "splc"
 |> Seq.iter (printfn "%s")
 
 // lexf
-// should have written this a long time ago:
-let splitNewline (x:string) = x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
 getData "lexf"
 |> splitNewline
 |> fun toks -> (toks.[0].Split(' ')|>Array.toSeq,Int32.Parse(toks.[1]))
@@ -714,7 +713,8 @@ getData "lexf"
 |> Seq.iter (printfn "%s")
 
 // lgis. unfinished.
-let longestSubsequence cmp s =
+// This was the first attempt. Too expensive.
+let longestSubsequence2 cmp s =
     Seq.fold (fun (sequences:list<list<int>>) (elem:int) ->
                 sequences
                 |> List.map 
@@ -722,24 +722,101 @@ let longestSubsequence cmp s =
                         match si with
                         | head :: tail -> 
                             if cmp elem head then
-                                elem::si
+                                [elem::si;si]
                             else
-                                si
+                                [si]
                         | [] -> []
                     )
+                |> List.concat
                 |> fun l -> [elem]::l
                 ) 
                 [] s
     |> List.maxBy (fun s -> List.length s)
     |> List.rev // needs reversing when done.
 
+// On the second attempt we build a data structure: what is the longest subsequence that ends with p<x?
+// this is a question of building a sorted list: a red-black tree will do fine and stackoverflow has a nice implementation here:
+// http://stackoverflow.com/questions/20297431/difficulty-in-writing-red-black-tree-in-f
+// This will work but it's likely still too expensive...
+type color = R | B
+type 'a tree = E | T of color * 'a tree * 'a * 'a tree
+
+let balance = function
+  | B, T (R, T (R,a,x,b), y, c), z, d
+  | B, T (R, a, x, T (R,b,y,c)), z, d
+  | B, a, x, T (R, T (R,b,y,c), z, d)
+  | B, a, x, T (R, b, y, T (R,c,z,d)) -> T (R, T (B,a,x,b), y, T (B,c,z,d))
+  | col, a, x, b                      -> T (col, a, x, b) 
+
+let insert cmp x s = 
+  let rec ins = function
+    | E                  -> T (R,E,x,E)
+    | T (col,a,y,b) as s ->
+        if x=y then
+          s
+        elif cmp x y then
+          balance (col, ins a, y, b)
+        else 
+          balance (col, a, y, ins b)
+        
+  match ins s with
+  | T (_,a,y,b) -> T (B,a,y,b)
+  | t -> t
+
+// This is an inorder traversal of all nodes such that x cmp node
+let rec leftLookup t cmp x : 'a list =
+    match t with
+    | E -> []
+    | T(_,left,curr,right) ->
+        if cmp x curr then
+            leftLookup left cmp x
+        else 
+            [leftLookup left cmp x;[curr];leftLookup right cmp x]
+            |> List.concat
+
+// unroll the prevls. see below. in progress.
+let rec unwind t cmp x =
+    if x= (-1) then []
+    else 
+        match t with
+        | E -> []
+        | T (_,left,(curr,prev,prevl),right) -> 
+            if x=curr then
+                [(unwind t cmp prev);[curr]]|>List.concat
+            else if cmp x curr then
+                unwind left cmp x 
+            else
+                match unwind right cmp x with
+                | [] -> []
+                | head::tail -> [unwind t cmp head ; head :: tail ] |> List.concat
+
+
+let longestSubsequence cmp s =
+    let cmp' (x,_,_) (y,_,_) = cmp x y
+    Seq.fold (fun (t: (int*int*int) tree) (elem:int) ->
+        leftLookup t cmp' (elem,-1,-1) // find all sequences that end with values < elem
+        |> fun l -> 
+            if List.isEmpty l then 
+                insert cmp' (elem,-1,1) t
+            else
+                l
+                |> Seq.maxBy (fun (x,prev,prevl) -> prevl)
+                |> fun (x,prev,prevl) -> insert cmp' (elem,x,prevl+1) t) E s
+    |> fun t -> // now we have the tree.  how do we get the largest prevl?
+        leftLookup t cmp' (Int32.MaxValue,-1,-1)
+        |> List.maxBy (fun (x,prev,len) -> len)
+        |> fun (lastElt,_,_) -> unwind t cmp lastElt
+        
+         
+
+
 getData "lgis"
 |> splitNewline
 |> fun toks -> toks.[1]
 |> fun x -> x.Split(' ')
 |> Array.map (fun x -> Int32.Parse(x))
-|> fun x -> x,longestSubsequence (>) x
-//|> fun (x,l1) -> (x,l1,longestSubsequence (<) x)
+|> fun x -> x,longestSubsequence (<) x
+|> fun (x,l1) -> (x,l1,longestSubsequence (>) x)
 |> fun (x,l1,l2) ->
     printfn "%s" (l1|>List.map string|> String.concat " ")
     printfn "%s" (l2|>List.map string|> String.concat " ")
