@@ -764,37 +764,41 @@ let insert cmp x s =
   | t -> t
 
 // This is an inorder traversal of all nodes such that x cmp node
-let rec leftLookup t cmp x : 'a list =
+let rec leftLookup t cmp x : 'a list =    
     match t with
     | E -> []
     | T(_,left,curr,right) ->
-        if cmp x curr then
-            leftLookup left cmp x
-        else 
-            [leftLookup left cmp x;[curr];leftLookup right cmp x]
-            |> List.concat
+        match x with // when passed None we return in-order traversal of the whole tree.
+        | None -> [leftLookup left cmp x;[curr];leftLookup right cmp x] |> List.concat
+        | Some(x') -> // otherwi
+            if cmp x' curr then
+                leftLookup left cmp x
+            else 
+                [leftLookup left cmp x;[curr];leftLookup right cmp x]
+                |> List.concat
 
 // unroll the prevls. see below. in progress.
-let rec unwind t cmp x =
-    if x= (-1) then []
-    else 
-        match t with
-        | E -> []
-        | T (_,left,(curr,prev,prevl),right) -> 
-            if x=curr then
-                [(unwind t cmp prev);[curr]]|>List.concat
-            else if cmp x curr then
-                unwind left cmp x 
-            else
-                match unwind right cmp x with
-                | [] -> []
-                | head::tail -> [unwind t cmp head ; head :: tail ] |> List.concat
+let rec lookup t cmp x =
+    match t with
+    | E -> None
+    | T (_,left,(curr,prev,prevl),right) ->
+        if x=curr then Some (curr,prev,prevl)
+        else if cmp x curr then lookup left cmp x
+        else lookup right cmp x
 
+let unroll (t:(int*int*int) tree) cmp lastElt =
+    Seq.unfold 
+        (fun prev -> 
+            let pnext=lookup t cmp prev
+            match pnext with
+            | None -> None
+            | Some (_,pp,_) -> Some (prev,pp)
+        ) lastElt
 
 let longestSubsequence cmp s =
     let cmp' (x,_,_) (y,_,_) = cmp x y
     Seq.fold (fun (t: (int*int*int) tree) (elem:int) ->
-        leftLookup t cmp' (elem,-1,-1) // find all sequences that end with values < elem
+        leftLookup t cmp' (Some (elem,-1,-1)) // find all sequences that end with values < elem
         |> fun l -> 
             if List.isEmpty l then 
                 insert cmp' (elem,-1,1) t
@@ -803,10 +807,11 @@ let longestSubsequence cmp s =
                 |> Seq.maxBy (fun (x,prev,prevl) -> prevl)
                 |> fun (x,prev,prevl) -> insert cmp' (elem,x,prevl+1) t) E s
     |> fun t -> // now we have the tree.  how do we get the largest prevl?
-        leftLookup t cmp' (Int32.MaxValue,-1,-1)
+        leftLookup t cmp' None
         |> List.maxBy (fun (x,prev,len) -> len)
-        |> fun (lastElt,_,_) -> unwind t cmp lastElt
-        
+        |> fun (lastElt,_,_) -> unroll t cmp lastElt
+    |> List.ofSeq
+    |> List.rev    
          
 
 
