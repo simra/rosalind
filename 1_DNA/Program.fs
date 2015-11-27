@@ -826,6 +826,39 @@ getData "lgis"
     printfn "%s" (l1|>List.map string|> String.concat " ")
     printfn "%s" (l2|>List.map string|> String.concat " ")
 
+// LONG
+type SuperstringMatch =
+    Superstring of string | Disjoint of (string*string) | None
+let combineStrings (s1:string) (s2:string) =
+    [-s2.Length .. s1.Length ]
+    |> Seq.map 
+        (fun i -> 
+            if i<0 then
+                let overlap= s2.Length+i
+                if overlap=0 then Disjoint(s1,s2)
+                else 
+                    let a=s1.Substring(0,overlap)
+                    let b=s2.Substring(s2.Length+i,overlap)
+                    if a=b then Superstring(s2+(s1.Substring(overlap)))
+                    else None
+            else
+                let overlap=(min s1.Length s2.Length) -i
+                if overlap=0 then Disjoint(s1,s2)
+                else
+                    let a=s1.Substring(i,overlap)
+                    let b=s2.Substring(0,overlap)
+                    if a=b then Superstring(s1+(s2.Substring(overlap)))
+                    else None)
+   |> Seq.countBy id
+   |> Seq.map (fun (a,b)->a)
+
+        
+    
+
+
+getData "long"
+|> 
+
 [<EntryPoint>]
 let main argv = 
     // dna
