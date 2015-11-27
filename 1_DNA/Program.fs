@@ -17,7 +17,7 @@ let guard m c =
         0
 
 getData "dna"
-|> Seq.countBy (fun x->x)
+|> Seq.countBy id
 |> Map.ofSeq
 |> fun m -> printfn "%d %d %d %d" (guard m 'A') (guard m 'C') (guard m 'G') (guard m 'T')
 
@@ -826,6 +826,42 @@ getData "lgis"
     printfn "%s" (l1|>List.map string|> String.concat " ")
     printfn "%s" (l2|>List.map string|> String.concat " ")
 
+// TRAN
+type Mutation = TRANSITION | TRANSVERSION | NONE
+let whatMutation (c1,c2) =
+    match c1 with
+    | 'A' -> 
+        if c2='G' then TRANSITION
+        else if c2='A' then NONE
+        else TRANSVERSION
+    | 'C' ->
+        if c2='T' then TRANSITION
+        else if c2='C' then NONE
+        else TRANSVERSION
+    | 'G' ->
+        if c2='A' then TRANSITION
+        else if c2='G' then NONE
+        else TRANSVERSION
+    | 'T' ->
+        if c2='C' then TRANSITION
+        else if c2='T' then NONE
+        else TRANSVERSION
+
+let ttRatio s1 s2 =
+    Seq.zip s1 s2
+    |> Seq.map whatMutation  
+    |> Seq.countBy id  
+    |> Map.ofSeq
+    |> fun m -> ((float m.[TRANSITION])/(float m.[TRANSVERSION]))
+
+getData "tran"
+|> fun x->x.Trim()
+|> parseFasta
+|> Array.ofSeq
+|> fun t -> ttRatio t.[0].String t.[1].String
+|> printfn "%f"
+
+
 // LONG
 type SuperstringMatch =
     Superstring of string | Disjoint of (string*string) | None
@@ -858,6 +894,10 @@ let combineStrings (s1:string) (s2:string) =
 
 getData "long"
 |> 
+
+// SIGN
+let signPerm n =
+    perm n
 
 [<EntryPoint>]
 let main argv = 
