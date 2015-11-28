@@ -9,6 +9,18 @@ let getData s =
     File.ReadAllText(data_root@@(sprintf "rosalind_%s_1_dataset.txt" s)) |> fun x -> x.Trim()
 let splitNewline (x:string) = x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
 
+type FASTA =
+    {Label:string;String:string}
+    
+let parseFasta (text:string) =
+    text.Split([|'>'|],StringSplitOptions.RemoveEmptyEntries)
+    |> Seq.map 
+        (fun lines-> 
+            lines.Split([|'\n';'\r'|],StringSplitOptions.RemoveEmptyEntries)
+            |> fun toks -> 
+                {Label=toks.[0]; String=toks.[1..]|>String.concat ""})
+
+
 // 1. DNA
 let guard m c =
     if Map.containsKey c m then
@@ -82,16 +94,6 @@ getData "fibd"
 
 
 // 6. GC: computing GC content
-type FASTA =
-    {Label:string;String:string}
-    
-let parseFasta (text:string) =
-    text.Split([|'>'|],StringSplitOptions.RemoveEmptyEntries)
-    |> Seq.map 
-        (fun lines-> 
-            lines.Split([|'\n';'\r'|],StringSplitOptions.RemoveEmptyEntries)
-            |> fun toks -> 
-                {Label=toks.[0]; String=toks.[1..]|>String.concat ""})
 
 let gcContent s =
     let m = Seq.countBy (fun x -> x) s |> Map.ofSeq
@@ -846,6 +848,7 @@ let whatMutation (c1,c2) =
         if c2='C' then TRANSITION
         else if c2='T' then NONE
         else TRANSVERSION
+    | _ -> raise (new Exception("Unrecognized nucleotide"))
 
 let ttRatio s1 s2 =
     Seq.zip s1 s2
@@ -864,40 +867,104 @@ getData "tran"
 
 // LONG
 type SuperstringMatch =
-    Superstring of string | Disjoint of (string*string) | None
-let combineStrings (s1:string) (s2:string) =
-    [-s2.Length .. s1.Length ]
+    Superstring of string | Disjoint of (string*string) 
+// Some things to improve: return option instead of disjoint.
+let combineStrings (s1:string) (s2:string) =        
+    let (a,b)=if s1.Length<s2.Length then (s1,s2) else (s2,s1)
+    [-a.Length .. b.Length ]
     |> Seq.map 
         (fun i -> 
+        //    printfn "i: %d" i
             if i<0 then
-                let overlap= s2.Length+i
-                if overlap=0 then Disjoint(s1,s2)
-                else 
-                    let a=s1.Substring(0,overlap)
-                    let b=s2.Substring(s2.Length+i,overlap)
-                    if a=b then Superstring(s2+(s1.Substring(overlap)))
-                    else None
+                let overlap= a.Length+i
+      //          printfn "o: %d" overlap
+                if overlap=0 then Disjoint(a,b)
+                else                                        
+                    let b'=b.Substring(0,overlap)
+                    let a'=a.Substring(-i,overlap)
+                    if a'=b' then Superstring(a+(b.Substring(overlap)))
+                    else Disjoint (a,b)
             else
-                let overlap=(min s1.Length s2.Length) -i
-                if overlap=0 then Disjoint(s1,s2)
-                else
-                    let a=s1.Substring(i,overlap)
-                    let b=s2.Substring(0,overlap)
-                    if a=b then Superstring(s1+(s2.Substring(overlap)))
-                    else None)
-   |> Seq.countBy id
-   |> Seq.map (fun (a,b)->a)
+                if (i<b.Length-a.Length) then
+                    let overlap=a.Length
+                    let b'=b.Substring(i,overlap)
+                    if b'=a then Superstring(b)
+                    else Disjoint(a,b) // obviously wrong
+                else 
+                    let overlap = b.Length-i
+    //                printfn "o2: %d" overlap
+                    if overlap=0 then Disjoint(a,b)
+                    else
+                        let b'=b.Substring(i,overlap)
+                        let a'=a.Substring(0,overlap)
+                        if a'=b' then Superstring(s1+(s2.Substring(overlap)))
+                        else Disjoint(a,b))
+    |> Seq.countBy id
+    |> Seq.map (fun (a,b)->a)
 
+let cost ssm = 
+    match ssm with
+    | Disjoint(a,b) -> a.Length+b.Length
+    | Superstring(s) -> s.Length
+
+
+let rec mergeSS s1 s2 =
+    match s1 with
+    | Disjoint (a,b) ->
+        match s2 with 
+        | Disjoint (c,d) ->
+            [s1;s2]
+        | Superstring(ss2) -> 
+            [combineStrings a ss2; combineStrings b ss2]|> Seq.concat|>List.ofSeq           
+    | Superstring(ss1) ->
+        match s2 with
+        | Disjoint (c,d) ->
+            [combineStrings c ss1; combineStrings d ss1]|> Seq.concat|>List.ofSeq           
+        | Superstring (ss2) ->
+            combineStrings ss1 ss2 |> List.ofSeq    
+
+
+let findBest ssm s =
+    s
+    |> Seq.map (fun x -> (x,mergeSS ssm (Superstring(x))|>Seq.minBy cost))        
+    |> Seq.minBy (fun (x,s) -> cost s)
+
+// to improve perf: switch to set indexing on labels rather than full identity.  Needs an extra map.
+let findSuperstring l : SuperstringMatch =
+    match l with 
+    | head::tail -> 
+        let (startx,startset)=Superstring(head),tail|>Set.ofList
         
+        Seq.unfold 
+            (fun (currstring,currset) -> 
+                if (Set.isEmpty currset) then 
+                    None
+                else
+                    let (remove,nextString)=findBest currstring currset
+                    Some(nextString,(nextString,Set.remove remove currset))                    
+                    ) (startx,startset)
+        |> List.ofSeq
+        |> List.rev
+        |> Seq.take 1
+        |> Seq.exactlyOne
+    | [] -> Superstring("")
+
+getData "long"
+|> fun x -> x.Trim()
+|> parseFasta
+|> Seq.map (fun x -> x.String)
+|> List.ofSeq
+|> findSuperstring
+|> printfn "%A"
+
+// SIGN
+(*
+let enumerate N =
     
 
 
-getData "long"
-|> 
-
-// SIGN
 let signPerm n =
-    perm n
+    perm n *)
 
 [<EntryPoint>]
 let main argv = 
