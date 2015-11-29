@@ -957,6 +957,52 @@ getData "long"
 |> findSuperstring
 |> printfn "%A"
 
+// PMCH
+// pn is basically n!  Implemented with bigint since we overlow int64.
+let rec pn (n:bigint) =
+    if n=bigint 1 then bigint 1
+    else n*(pn (n-bigint 1)) // only n ways to connect since the graph must be bipartite. This is a slightly different scenario from what's described in paragraph 2 of the problem description.
+
+let pnAUCG (auCount:int,cgCount:int) =
+    (pn (bigint auCount))*(pn (bigint cgCount))
+//    (pn auCount)*(pn cgCount)
+
+getData "pmch"
+|> fun x -> x.Trim()
+|> parseFasta
+|> Seq.exactlyOne
+|> fun x-> x.String|>Seq.countBy id
+|> Map.ofSeq
+|> fun m -> (m.['A'],m.['C']) // counting pairs so only take one side of each pair in the count
+|> pnAUCG
+|> printfn "%A"
+
+// PPER
+let rec P n k =
+    if k=1 then n
+    else (n*(P (n-1) (k-1)))%1000000
+
+// input: 
+(*
+> P 21 7;;
+val it : int = 51200
+> *)
+
+// PROB
+let pRand inStr gcContent =
+    [('A',(1.-gcContent)/2.);('C',gcContent/2.);('G',gcContent/2.);('T',(1.-gcContent)/2.)]
+    |> Map.ofList
+    |> fun m -> (inStr |> Seq.map (fun c -> m.[c]|>log10) |> Seq.sum)
+
+getData "prob"
+|> splitNewline
+|> fun toks -> toks.[0], toks.[1].Split(' ')|>Seq.map (Double.Parse)
+|> fun (inStr,gcContents) -> (gcContents|>Seq.map (pRand inStr))
+|> Seq.map (sprintf "%f")
+|> String.concat " "
+|> printfn "%s"
+
+
 // SIGN
 (*
 let enumerate N =
