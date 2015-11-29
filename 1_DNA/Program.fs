@@ -1004,14 +1004,104 @@ getData "prob"
 
 
 // SIGN
-(*
-let enumerate N =
+let enumerate N = 
+    [0..int (2.**(float N)-1.)]
+    |> Seq.map (
+        fun X ->
+            Seq.unfold 
+                (fun (x,i) -> 
+                    if i=0 then None 
+                    else
+                        if x%2=0 then Some (1,(x/2,i-1)) 
+                        else Some (-1,(x/2,i-1))) (X,N)|>Array.ofSeq)
+
+let cross f s1 s2 =
+    seq {
+        for a in s1 do
+            yield! seq {
+                for b in s2 do
+                    yield f a b
+                }
+        }
+
+let applySign p s =
+    Seq.zip p s
+    |> Seq.map (fun (a,b) -> a*b)
+
+let printVector v =
+    v
+    |> Seq.map string
+    |> String.concat " "
+    |> printfn "%s"
+
+let doSign N = 
+    let result = cross applySign (enumerate N) (permute [1..N]) |> List.ofSeq
+    printfn "%d" (List.length result)
+    result
+    |>Seq.iter printVector
     
 
+// SSEQ
+let findSseq (s:string) (t:string) =
+    Seq.unfold (fun (i,j) ->
+        if (i=s.Length || j=t.Length) then None 
+        else
+            let ix = s.IndexOf(t.[j],i)
+            Some (ix,(ix+1,j+1))) (0,0)
+    |> Seq.map ((+) 1)
 
-let signPerm n =
-    perm n *)
+getData "sseq"
+|> fun x -> x.Trim()
+|> parseFasta
+|> Array.ofSeq
+|> fun toks -> findSseq (toks.[0].String) (toks.[1].String)
+|> Seq.map string
+|> String.concat " "
+|> printfn "%s"
 
+// TREE
+// we'll assume all the inputs are trees.  We just need to count CCs.
+let countCCs vCount edges =
+    let initLookup = [1..vCount]|> Seq.map (fun x ->x,x)|> Map.ofSeq
+    let initSets = [1..vCount]|> Seq.map (fun x -> (x,[x]))|>Map.ofSeq
+    edges
+    |>Seq.fold 
+        (fun (componentLookup:Map<int,int>,sets:Map<int,int list>,nextIx) (v1,v2) -> 
+            if Map.containsKey v1 componentLookup then
+                let c1=componentLookup.[v1]
+                if Map.containsKey v2 componentLookup then
+                    let c2=componentLookup.[v2]
+                    if c1=c2 then (componentLookup,sets,nextIx)
+                    else
+                        if List.length sets.[c2]>List.length sets.[c1] then
+                            let outLookup = Seq.fold (fun m vi -> Map.add vi c2 m) componentLookup sets.[c1]
+                            let outSets = sets|>Map.add c2 (List.concat [sets.[c2];sets.[c1]]) |> Map.remove c1
+                            (outLookup,outSets,nextIx)
+                        else 
+                            let outLookup = Seq.fold (fun m vi -> Map.add vi c1 m) componentLookup sets.[c2]
+                            let outSets = sets|>Map.add c1 (List.concat [sets.[c1];sets.[c2]]) |> Map.remove c2
+                            (outLookup,outSets,nextIx)
+                else
+                    (Map.add v2 c1 componentLookup, Map.add c1 (v2::sets.[c1]) sets, nextIx)
+            else
+                if Map.containsKey v2 componentLookup then
+                    let c2=componentLookup.[v2]
+                    (Map.add v1 c2 componentLookup, Map.add c2 (v1::sets.[c2]) sets, nextIx)
+                else
+                    let newSet=nextIx
+                    (Map.add v1 newSet componentLookup|>Map.add v2 newSet, Map.add newSet [v1;v2] sets, newSet+1)
+    ) (initLookup,initSets,vCount+1)
+    |> (fun (_,s,_) -> s |> Map.toList |> List.length) 
+   
+getData "tree"
+|> fun x -> x.Trim()
+|> splitNewline
+|> fun toks ->
+    (int toks.[0], toks |>Seq.skip 1 |> Seq.map (fun s -> s.Split(' ') |> fun t -> int t.[0],int t.[1]))
+|> fun (count, edges) -> countCCs count edges
+|> fun x -> x-1   
+|> printfn "%d"
+    
 [<EntryPoint>]
 let main argv = 
     // dna
