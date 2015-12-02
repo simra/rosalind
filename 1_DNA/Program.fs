@@ -20,13 +20,14 @@ let parseFasta (text:string) =
             |> fun toks -> 
                 {Label=toks.[0]; String=toks.[1..]|>String.concat ""})
 
-
-// 1. DNA
 let guard m c =
     if Map.containsKey c m then
         m.[c]
     else
         0
+
+
+// 1. DNA
 
 getData "dna"
 |> Seq.countBy id
@@ -1101,6 +1102,75 @@ getData "tree"
 |> fun (count, edges) -> countCCs count edges
 |> fun x -> x-1   
 |> printfn "%d"
+
+// CAT
+// first let's tool with Catalan numbers.  They won't quite represent the answer because we have additional constraints due to base pair names.
+// this is an expensive approach since it fails to capture partial results.
+// How to do proper dynamic programming in a functional way?  With a mutable map?
+
+// In the end the solution is very easy: there are a limited number of split points which have equal 
+// pairings on both the left and the right.  Find those splits and count up. function could only be 
+// improved with proper dynamic accounting.
+open System.Collections.Generic
+ // some handy dynamic programming snippets from http://www.fssnip.net/8P
+ /// The function creates a function that calls the argument 'f'
+ /// only once and stores the result in a mutable dictionary (cache)
+ /// Repeated calls to the resulting function return cached values.
+let memoize f =    
+   // Create (mutable) cache that is used for storing results of 
+   // for function arguments that were already calculated.
+    let cache = new Dictionary<_, _>()
+    (fun x ->
+       // The returned function first performs a cache lookup
+       let succ, v = cache.TryGetValue(x)
+       if succ then v else 
+         // If value was not found, calculate & cache it
+         let v = f(x) 
+         cache.Add(x, v)
+         v)
+
+let isComplement c1 c2 =
+    (c1='A' && c2='U')
+    || (c1='U' && c2='A')
+    || (c1='C' && c2='G')
+    || (c1='G' && c2='C')
+
+let splitStr (str:string) (x:int) =
+    // split the string at x, dropping the first char, and the char at x
+    (str.Substring(1,x-1),str.Substring(x+1,str.Length-x-1))
+
+let isValidStr = memoize (fun str ->
+    let m=
+        str
+        |> Seq.countBy id
+        |> Map.ofSeq
+    (guard m 'A')=(guard m 'U') && (guard m 'C')=(guard m 'G'))
+
+let isValidSplit (l,r) =
+    isValidStr l && isValidStr r
+
+let rec cat = memoize (fun str ->     
+    if not (isValidStr str) then raise (new Exception (sprintf "Invalid string %s" str))
+    if str="" || str.Length=2 then 1L    
+    else
+        [1..str.Length-1] // this can be sped up by jumping in increments of 2.
+        |> Seq.map 
+            (fun x -> 
+                if isComplement str.[0] str.[x] then 
+                    let (l,r)=splitStr str x
+                    if isValidSplit (l,r) then
+                        (cat l * cat r) 
+                    else
+                        0L
+                else 0L)
+        |> Seq.sum
+        |> fun x -> x%1000000L)
+    
+getData "cat"
+|> parseFasta
+|> Seq.exactlyOne
+|> fun x -> cat x.String
+|> printfn "%d"    
     
 [<EntryPoint>]
 let main argv = 
