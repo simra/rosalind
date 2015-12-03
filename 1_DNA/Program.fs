@@ -1172,6 +1172,36 @@ getData "cat"
 |> fun x -> cat x.String
 |> printfn "%d"    
     
+// corr:
+// We'll go with the constraints rather than consensus
+let corrData=
+    getData "corr"
+    |> parseFasta
+    |> Seq.map (fun x -> [x.String;reverseComplement x.String])
+    |> List.concat
+    |> Seq.countBy id
+    |> Map.ofSeq
+
+let correctReads=
+    corrData
+    |> Map.toSeq
+    |> Seq.map (fun (x,c) -> (x,c+(guard corrData (reverseComplement x))))
+    |> Seq.filter (fun (x,c)->c>=4) // if it appears twice in the data set we'll have also replicated it twice.
+    |> List.ofSeq
+
+let closestRead x =
+    correctReads
+    |> Seq.map (fun (y,c)-> (y,dh x y ))
+    |> Seq.minBy (fun (y,hamm)-> hamm)
+    
+
+getData "corr"
+|> parseFasta
+|> Seq.map (fun x -> (x.String,closestRead x.String))
+|> Seq.filter (fun (x,(y,h))-> h=1)
+|> Seq.map (fun (x,(y,h)) -> sprintf "%s->%s" x y)
+|> Seq.iter (printfn "%s")    
+
 [<EntryPoint>]
 let main argv = 
     // dna
