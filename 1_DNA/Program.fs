@@ -1202,6 +1202,27 @@ getData "corr"
 |> Seq.map (fun (x,(y,h)) -> sprintf "%s->%s" x y)
 |> Seq.iter (printfn "%s")    
 
+// KMP
+// Failure array for Knuth-Morris-Pratt
+// https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm
+let failureArray (s:string) =
+    Seq.unfold (
+        fun (k,l) ->
+            if k=0 then Some (0,(1,0))
+            else if k=s.Length then None
+            else if l>0 then //T[cnd]
+            //else if s.[k]=s.[l] then Some (l+1,(k+1,l+1))
+            //else if s.[k]=s.[0] then Some (1,(k+1,1))
+            else Some (0,(k+1,0))    
+    ) (0,0) 
+getData "kmp"
+|> parseFasta
+|> Seq.exactlyOne
+|> fun x-> failureArray x.String
+|> Seq.map string
+|> String.concat " "
+|> printfn "%s"
+
 [<EntryPoint>]
 let main argv = 
     // dna
