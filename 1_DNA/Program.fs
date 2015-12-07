@@ -1268,6 +1268,42 @@ getData "kmp"
 |> String.concat " "
 |> printfn "%s"
 
+// LCSQ
+// Greedy approach.
+let lcsq (s1:string) (s2:string) =
+    let rec lcsqhelper = 
+        memoize (fun (i,j) ->
+        if i=s1.Length || j=s2.Length then ""
+        else
+            if s1.[i]=s2.[j] then 
+                string s1.[i]+(lcsqhelper (i+1,j+1))            
+            else
+                // should be possible to prune certain branches but I ended up with the wrong answer when I tried this. Dynamic programming FTW.
+                let sq1=lcsqhelper(i+1,j)
+                let sq2=lcsqhelper(i,j+1)
+                if sq1.Length>sq2.Length then
+                    sq1
+                else
+                    sq2
+     )
+    lcsqhelper (0,0)       
+
+let rec isSubsequence (s:string) (sq:string) =
+    if sq.Length=0 then true
+    else if s.Length=0 then false
+    else if s.[0]=sq.[0] then isSubsequence (s.Substring(1)) (sq.Substring(1))
+    else isSubsequence (s.Substring(1)) sq
+    
+
+getData "lcsq"
+|> parseFasta
+|> Array.ofSeq
+|> fun toks -> (toks.[0].String,toks.[1].String,lcsq toks.[0].String toks.[1].String)
+|> fun (s1,s2,sq) -> (isSubsequence s1 sq),(isSubsequence s2 sq),sq
+|> fun (b1,b2,sq) -> printfn "%b\n%b\n%s\n%d" b1 b2 sq sq.Length
+
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
