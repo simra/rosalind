@@ -1202,7 +1202,51 @@ getData "corr"
 |> Seq.map (fun (x,(y,h)) -> sprintf "%s->%s" x y)
 |> Seq.iter (printfn "%s")    
 
+
+
+// inod
+// wikipedia helps here. https://en.wikipedia.org/wiki/Unrooted_binary_tree
+// An unrooted tree with 3 leaves has 1 internal node.
+// adding another leaf requires splitting and edge and adding a vertex.  So a tree with 4 leaves has 2 internal nodes.
+// in general n_l = l-2
+// 
+getData "inod"
+|> int
+|> fun x -> x-2
+|> printfn "%d"
+
+// kmer. Would be trivial if we didn't have to enumerate all possible 
+let rec enumerateKmers k : string list =
+    if k=0 then [""]
+    else 
+        enumerateKmers (k-1)
+        |> List.map (fun l ->
+            [
+                "A"+ l 
+                "C" + l
+                "G" + l
+                "T" + l
+            ])
+        |> List.concat
+            
+
+      
+getData "kmer"
+|> parseFasta
+|> Seq.exactlyOne
+|> fun x -> x.String
+|> Seq.windowed 4
+|> Seq.map (fun c -> c|>Seq.map string|>String.concat "")
+|> Seq.fold (fun m s-> Map.add (string s) (m.[string s]+1) m) (enumerateKmers 4|>Seq.map (fun s -> (s,0))|> Map.ofSeq)
+|> Map.toSeq
+|> Seq.sortBy (fun (x,y)->x)
+|> Seq.map (fun (x,y)-> string y)
+|> String.concat " "
+|> printfn "%s"
+
+
 // KMP
+// IN PROGRESS
 // Failure array for Knuth-Morris-Pratt
 // https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm
 let failureArray (s:string) =
@@ -1215,6 +1259,7 @@ let failureArray (s:string) =
             //else if s.[k]=s.[0] then Some (1,(k+1,1))
             else Some (0,(k+1,0))    
     ) (0,0) 
+
 getData "kmp"
 |> parseFasta
 |> Seq.exactlyOne
