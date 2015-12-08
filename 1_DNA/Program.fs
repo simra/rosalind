@@ -1246,25 +1246,58 @@ getData "kmer"
 
 
 // KMP
-// IN PROGRESS
+
 // Failure array for Knuth-Morris-Pratt
 // https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm
+// a bit of a hack adding List<int>, so we have O(1) lookback.
+// This did not work.  Somewhere there is an off-by-one issue.
+//open System.Collections.Generic
+(* not quite right.
 let failureArray (s:string) =
+    let mutable t=Array.zeroCreate s.Length
     Seq.unfold (
-        fun (k,l) ->
-            if k=0 then Some (0,(1,0))
-            else if k=s.Length then None
-            else if l>0 then //T[cnd]
-            //else if s.[k]=s.[l] then Some (l+1,(k+1,l+1))
-            //else if s.[k]=s.[0] then Some (1,(k+1,1))
-            else Some (0,(k+1,0))    
-    ) (0,0) 
+        fun (pos:int,cnd:int) ->
+            eprintfn "%d\t%d" pos cnd
+            if pos=s.Length then None
+            else if s.[pos] = s.[cnd] then                    
+                t.[pos] <- cnd + 1
+                Some (cnd+1,(pos+1, (cnd+1)))
+            else if cnd > 0 then                
+                Some (t.[cnd],(pos, t.[cnd]))
+            else 
+                t.[pos] <- 0 
+                //if cnd>0 then eprintfn "%s" "unexpected cnd"
+                Some (cnd,(pos+1,cnd)))
+        (2,0)
+    |> fun s -> (s|>List.ofSeq,t)    
+    *)
+// http://www.inf.fh-flensburg.de/lang/algorithmen/pattern/kmpen.htm
+// differs slightly from the web page by offsetting the boundary array by 1.
+// This is probably the one problem in this set where laziness got the best of me and I went with the online code.
+// I fundamentally detest array twiddling- glad other smart people work these things out.
+let failureArray (p:string) =
+    let mutable i=0
+    let mutable j= -1
+    let mutable b=Array.zeroCreate (p.Length+1)
+    b.[i]<-j;
+    while (i<p.Length) do
+        eprintfn "%d\t%d" i j
+        while (j>=0 && p.[i]<>p.[j]) do
+            j<-b.[j]
+        i<-i+1 
+        j<-j+1
+        b.[i]<-j;
+    b
+    |> Seq.ofArray
+    |> Seq.skip 1
+    
 
 getData "kmp"
 |> parseFasta
 |> Seq.exactlyOne
 |> fun x-> failureArray x.String
 |> Seq.map string
+//|> fun (s,t) -> t|>Array.map string
 |> String.concat " "
 |> printfn "%s"
 
