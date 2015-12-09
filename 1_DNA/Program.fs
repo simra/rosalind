@@ -1336,6 +1336,7 @@ getData "lcsq"
 |> fun (b1,b2,sq) -> printfn "%b\n%b\n%s\n%d" b1 b2 sq sq.Length
 
 // lexv
+// variation on lexf.
 getData "lexv"
 |> splitNewline
 |> fun toks -> (toks.[0].Split(' ')|>Array.toSeq,Int32.Parse(toks.[1]))
