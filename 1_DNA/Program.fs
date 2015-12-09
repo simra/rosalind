@@ -1335,6 +1335,26 @@ getData "lcsq"
 |> fun (s1,s2,sq) -> (isSubsequence s1 sq),(isSubsequence s2 sq),sq
 |> fun (b1,b2,sq) -> printfn "%b\n%b\n%s\n%d" b1 b2 sq sq.Length
 
+// lexv
+getData "lexv"
+|> splitNewline
+|> fun toks -> (toks.[0].Split(' ')|>Array.toSeq,Int32.Parse(toks.[1]))
+|> fun (alphabet:seq<string>,strlen:int) ->
+    let alphabet' = "_" :: (List.ofSeq alphabet)
+    let rec addChar (i:int) (s:string) : seq<string> =
+        if i=0 then
+            seq {yield s}
+        else
+            seq {               
+                for a in alphabet' do
+                    if a="_" then yield s
+                    else 
+                        yield! (s+a)|>addChar (i-1)
+            }
+    addChar strlen ""
+    //|> Seq.map (fun s->s.Replace("_",""))
+    |> Seq.filter (fun s-> not (String.IsNullOrEmpty(s)))
+|> Seq.iter (printfn "%s")
 
 
 [<EntryPoint>]
