@@ -26,6 +26,29 @@ let guard m c =
     else
         0
 
+let rec partFact (n:int64) (stop:int64) =
+    if (n<=stop) then 1L
+    else n*(partFact (n-1L) stop)
+
+let rec fact (n:int64) = partFact n 1L 
+
+let rec partFactB (n:bigint) (stop:bigint) =
+    if (n<=stop) then bigint 1
+    else n*(partFactB (n-bigint 1) stop)
+
+let rec factB (n:bigint) = partFactB n (bigint 1) 
+
+// https://en.wikipedia.org/wiki/Binomial_coefficient#Multiplicative_formula
+// This was actually incorrect on the wikipedia page and I had to make an edit!
+let rec C n k =
+    if k=0L || k=n then 1L
+    else if k>=(n/2L+1L) then C n (n-k)
+    else 
+        [1L..k]
+        |> Seq.map (fun i -> (float (n-k+i))/(float i))
+        |> Seq.reduce (*)
+        |> int64
+
 
 // 1. DNA
 
@@ -120,28 +143,6 @@ getData "hamm"
 |> fun lines -> printfn "%d" (dh lines.[0] lines.[1])
 
 // 8. IPRB: Mendel's first law.
-let rec partFact (n:int64) (stop:int64) =
-    if (n<=stop) then 1L
-    else n*(partFact (n-1L) stop)
-
-let rec fact (n:int64) = partFact n 1L 
-//let C n k = (partFact n (n-k))/(fact k) // blows up for k>=67
-// https://en.wikipedia.org/wiki/Binomial_coefficient#Recursive_formula
-// too expensive.
-(*let rec C n k = 
-    if k=0L || k=n then 1L
-    else (C (n-1L) (k-1L)) + (C (n-1L) k)*)
-// https://en.wikipedia.org/wiki/Binomial_coefficient#Multiplicative_formula
-// This was actually incorrect on the wikipedia page and I had to make an edit!
-let rec C n k =
-    if k=0L || k=n then 1L
-    else if k>=(n/2L+1L) then C n (n-k)
-    else 
-        [1L..k]
-        |> Seq.map (fun i -> (float (n-k+i))/(float i))
-        |> Seq.reduce (*)
-        |> int64
-
 let pDom k m n =
     let kk = float (C k 2L)
     let km = float (k*m)
@@ -1356,6 +1357,130 @@ getData "lexv"
     //|> Seq.map (fun s->s.Replace("_",""))
     |> Seq.filter (fun s-> not (String.IsNullOrEmpty(s)))
 |> Seq.iter (printfn "%s")
+
+
+// MMCH
+getData "mmch"
+|> fun x -> x.Trim()
+|> parseFasta
+|> Seq.exactlyOne
+|> fun x-> x.String|>Seq.countBy id
+|> Map.ofSeq
+|> fun m -> ((max m.['A'] m.['U'],min m.['A'] m.['U']), (max m.['C'] m.['G'], min m.['C'] m.['G'])) 
+|> fun ((a,u),(c,g)) -> 
+    let i = fun (x:int) -> bigint x; 
+    ((factB (i a))/factB (i (a-u)))*((factB (i c))/factB (i (c-g))) // this could be more efficient.
+|> printfn "%A"
+
+
+// pdst
+getData "pdst"
+|> parseFasta
+|> fun s ->
+    seq {
+        for a in s do
+            yield seq {
+                for b in s do
+                yield ((dh a.String b.String)|>float)/(float a.String.Length)
+            }
+        }
+|> Seq.iter (fun s -> s|>Seq.map string|>String.concat " "|>printfn "%s")
+
+// rear
+// ugly: is there no string.Reverse?
+//let reversal (s:string) (i:int) (j:int) =
+//    s.Substring(0,i)+(s.Substring(i,j-i)|>List.ofSeq|>List.rev|>Seq.map string|>String.concat "")+s.Substring(j)
+
+let reversal (a:int[]) (i:int) (j:int) =
+    let result=Array.copy a
+    for x in [i..j-1] do
+        result.[x]<-a.[j-1-(x-i)]
+    result
+
+// didn't converge. :(  you reach a local min.
+let step (s:int[]) (target:int[]) =    
+    seq {
+        for i in [0..s.Length] do
+            for j in [i+1..s.Length] do
+                yield (i,j)    
+    }
+    |> Seq.map (fun (i,j) -> (i,j,dh (reversal s i j) target))
+    |> Seq.minBy (fun (i,j,d)->d)
+
+let rec rear s target =
+    if dh s target = 0 then 0
+    else 
+        eprintfn "Trying %A -> %A" s target
+        let (i,j,_)=step s target
+        eprintfn "step: %A %A %d %d %d" s target i j (dh (reversal s i j) target) 
+        1 + rear (reversal s i j) target
+
+// suboptimal
+let step2 (s:int[]) (target:int[]) i =
+    // assume: everything before i is in the right place. s.[i] is wrong: find the symbol that belongs.
+    let t=target.[i]
+    let mutable j=i+1
+    while s.[j]<>t do
+        j<-j+1
+    j+1
+
+// feels ugly with all these mutables.
+let rec rear2 (s:int[]) (target:int[]) i =
+    if dh s target = 0 then 0
+    else 
+        let mutable i'=i
+        while s.[i']=target.[i'] do
+            i'<-i'+1
+        let j=step2 s target i'
+        1 + (rear2 (reversal s i' j) target (i'+1))
+
+// since dfs and iterative don't work, go with BFS.  We need to keep state..
+// so we need A*.. ugh.
+open BinomialHeapPQ
+let toString (s:int[]) = s |> Seq.map string |> String.concat " "
+let rear3 (target:int[]) (s:int[]) = 
+    let mutable state=Set.add (s|>toString) Set.empty
+    let rec bfsLoop q0 =
+        if BinomialHeapPQ.isEmpty q0 then
+            raise (new Exception "No solution")
+        else 
+            let n = BinomialHeapPQ.getMin q0
+            let (d,s')=n.Value.v
+            let dist=dh s' target
+            eprintfn "%d %d %s" d dist (s'|>toString)
+            if dist = 0 then d
+            else
+                let q1 = BinomialHeapPQ.deleteMin q0
+                let vs = 
+                    seq {
+                        for i in [0..Array.length s'] do
+                            for j in [i+1..Array.length s'] do
+                                let r=reversal s' i j
+                                let rStr=r|>toString
+                                if (not (Set.contains rStr state)) then
+                                    state <- Set.add rStr state
+                                    yield r    
+                    }
+                    |> Seq.map (fun s'' -> (d+1,s''))
+                    |> List.ofSeq
+                let q = Seq.fold (fun qq (dd,ss) -> BinomialHeapPQ.insert ((dh ss target)|>uint32) (dd,ss) qq) q1 vs
+                bfsLoop q
+    bfsLoop (BinomialHeapPQ.insert ((dh s target)|>uint32) (0,s) BinomialHeapPQ.empty)
+
+getData "rear"
+|> splitNewline
+|> Seq.map (fun s -> s.Split ' '|> Seq.map int|>Array.ofSeq)
+//|> Seq.take 4
+|> Array.ofSeq
+|> fun a ->
+    seq {
+        for i in [0 .. 2 .. a.Length-1] do
+            yield rear3 a.[i] a.[i+1]
+        }
+|> Seq.map string
+|> String.concat " "
+|> printfn "%s"
+
 
 
 [<EntryPoint>]
