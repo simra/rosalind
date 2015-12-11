@@ -46,6 +46,7 @@ let toBigint (a:int[]) =
         result<-result*(bigint 10)+bigint x
     result
 
+// in the end int64 would have been fine.
 type State = HashSet<bigint>
 
 
@@ -72,6 +73,12 @@ let rear4 (target:int[]) (s:int[]) =
                     yield (i,j)
         }
         |> List.ofSeq
+    let lex =
+        let s=Array.create target.Length 0
+        for i in [0..s.Length-1] do
+            s.[target.[i]-1]<-i
+        s
+
     let rec bfsLoop (q0:Queue<int*int[]>) =
         iter<- iter+1
         if q0.Count=0 then
@@ -83,29 +90,38 @@ let rear4 (target:int[]) (s:int[]) =
         
             if differs s' target |> not then d
             else   
-            (*             
                 seq {
                     for (i,j) in allperms do
-                        let r=reversal s' i j
-                        if (not (State.contains state r 0)) then
-                            State.add state r 0 |> ignore
-                            yield r    
+                        if lex.[s'.[i]-1]>lex.[s'.[j-1]-1] then
+                            let r=reversal s' i j
+                            let br=toBigint r
+                            if (not (state.Contains(br))) then
+                                state.Add(br)|>ignore
+                                yield r    
                 }
-                |> Seq.map (fun s'' -> (d+1,s'')) *)
+                 
+                |> Seq.iter ( // still needs short circuit.
+                    fun r -> q0.Enqueue (d+1,r) )
+                
+                (*
                 allperms // not clear this speeds things up..
                 |> Seq.map 
-                    (fun (i,j) -> 
-                        async { 
-                            let r = reversal s' i j
-                            return (r,state.Contains(toBigint r))//State.contains state r 0)
-                        })
+                    (fun (i,j) ->
+                        if lex.[s'.[i]-1]>lex.[s'.[j-1]-1] then // only expand things that swap out-of-order values.
+                            Some (async { 
+                                let r = reversal s' i j
+                                return (r,state.Contains(toBigint r))//State.contains state r 0)
+                            })
+                        else None)
+                |> Seq.choose id
                 |> Async.Parallel
                 |> Async.RunSynchronously
                 |> Seq.filter (fun (_,b)->not b)
                 |> Seq.iter (fun (r,_) -> 
                     //State.add state r 0 |> ignore
                     state.Add(toBigint r)|>ignore
-                    q0.Enqueue (d+1,r) )
+                    // how to short-circuit out?
+                    q0.Enqueue (d+1,r) ) *)
                 bfsLoop q0
     let q=new Queue<int*int[]>();
     q.Enqueue(0,s)
@@ -122,8 +138,10 @@ let main argv =
     |> fun a ->
         seq {
             for i in [0 .. 2 .. a.Length-1] do
-                yield rear4 a.[i] a.[i+1]
+                yield async { return rear4 a.[i] a.[i+1] }
             }
+    |> Async.Parallel
+    |> Async.RunSynchronously
     |> Seq.map string
     |> String.concat " "
     |> printfn "%s"

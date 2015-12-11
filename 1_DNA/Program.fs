@@ -1387,6 +1387,8 @@ getData "pdst"
 |> Seq.iter (fun s -> s|>Seq.map string|>String.concat " "|>printfn "%s")
 
 // rear
+// Wow. this was hard- NP-hard.  It takes a fair amount of smart optimization to efficiently find the solution.
+// see Program.fs in the rear project.  below is a ton of scratch code before I arrived at a solution.
 // ugly: is there no string.Reverse?
 //let reversal (s:string) (i:int) (j:int) =
 //    s.Substring(0,i)+(s.Substring(i,j-i)|>List.ofSeq|>List.rev|>Seq.map string|>String.concat "")+s.Substring(j)
