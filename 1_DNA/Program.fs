@@ -1390,28 +1390,57 @@ getData "pdst"
 // ugly: is there no string.Reverse?
 //let reversal (s:string) (i:int) (j:int) =
 //    s.Substring(0,i)+(s.Substring(i,j-i)|>List.ofSeq|>List.rev|>Seq.map string|>String.concat "")+s.Substring(j)
-
+// how can we make this wicked fast?
 let reversal (a:int[]) (i:int) (j:int) =
     let result=Array.copy a
     for x in [i..j-1] do
         result.[x]<-a.[j-1-(x-i)]
     result
 
+let permCost (s:int[]) (target:int[]) =
+    Seq.unfold 
+        (fun i -> 
+            if i=s.Length then None
+            else Some (i-Array.findIndex (fun x -> x= s.[i]) target, i+1)) 0
+    |>Seq.map (fun x -> (float x)**2.)
+    |> Seq.sum
+
+// move target furthest from home
+let permCost2 (s:int[]) (target:int[]) =
+    Seq.unfold 
+        (fun i -> 
+            if i=s.Length then None
+            else Some (abs (i-Array.findIndex (fun x -> x= s.[i]) target), i+1)) 0
+//    |>Seq.map (fun x -> (float x)**2.)
+    |>Seq.sum
+//    |> Seq.max
+
+
 // didn't converge. :(  you reach a local min.
 let step (s:int[]) (target:int[]) =    
     seq {
         for i in [0..s.Length] do
-            for j in [i+1..s.Length] do
+            for j in [i+2..s.Length] do
                 yield (i,j)    
     }
     |> Seq.map (fun (i,j) -> (i,j,dh (reversal s i j) target))
     |> Seq.minBy (fun (i,j,d)->d)
 
+let stepQuad (s:int[]) (target:int[]) =    
+    seq {
+        for i in [0..s.Length] do
+            for j in [i+2..s.Length] do
+                yield (i,j)    
+    }
+    |> Seq.map (fun (i,j) -> (i,j,permCost2 (reversal s i j) target))
+    |> Seq.minBy (fun (i,j,d)->d)
+ 
+
 let rec rear s target =
     if dh s target = 0 then 0
     else 
         eprintfn "Trying %A -> %A" s target
-        let (i,j,_)=step s target
+        let (i,j,_)=stepQuad s target
         eprintfn "step: %A %A %d %d %d" s target i j (dh (reversal s i j) target) 
         1 + rear (reversal s i j) target
 
@@ -1436,6 +1465,7 @@ let rec rear2 (s:int[]) (target:int[]) i =
 
 // since dfs and iterative don't work, go with BFS.  We need to keep state..
 // so we need A*.. ugh.
+// now we have no guarantee for minimality....
 open BinomialHeapPQ
 let toString (s:int[]) = s |> Seq.map string |> String.concat " "
 let rear3 (target:int[]) (s:int[]) = 
@@ -1454,7 +1484,7 @@ let rear3 (target:int[]) (s:int[]) =
                 let vs = 
                     seq {
                         for i in [0..Array.length s'] do
-                            for j in [i+1..Array.length s'] do
+                            for j in [i+2..Array.length s'] do
                                 let r=reversal s' i j
                                 let rStr=r|>toString
                                 if (not (Set.contains rStr state)) then
@@ -1467,15 +1497,82 @@ let rear3 (target:int[]) (s:int[]) =
                 bfsLoop q
     bfsLoop (BinomialHeapPQ.insert ((dh s target)|>uint32) (0,s) BinomialHeapPQ.empty)
 
+// let's just do bread-and-butter bfs
+// tree structure to track probed permutations. A little sloppy but I think this will work.
+type State =
+    | Empty
+    | Elements of Dictionary<int,State>
+    with 
+    static member add s (a:int[]) (i:int) =
+        if i=a.Length then s
+        else 
+            match s with 
+            | Elements(r) ->
+                if not (r.ContainsKey(a.[i])) then
+                    r.[a.[i]]<-Elements(new Dictionary<int,State>())
+                State.add r.[a.[i]] a (i+1)
+            | Empty -> raise (new Exception "bad add")       
+
+    static member contains s (a:int[]) (i:int) =
+        if i=a.Length then true
+        else
+            match s with
+            | Empty -> false
+            | Elements(r) ->
+                if not (r.ContainsKey(a.[i])) then false
+                else 
+                    State.contains r.[a.[i]] a (i+1)
+
+open System.Collections.Generic
+let differs (a:int[]) (b:int[]) =
+    let mutable i=0
+    while i<a.Length && a.[i]=b.[i] do        
+        i<-i+1
+    i<a.Length
+
+let rear4 (target:int[]) (s:int[]) = 
+    let mutable state=Elements(new Dictionary<int,State>())//Set.add (s|>toString) Set.empty
+    let mutable iter=0
+    let rec bfsLoop (q0:Queue<int*int[]>) =
+        iter<- iter+1
+        if q0.Count=0 then
+            raise (new Exception "No solution")
+        else 
+            let (d,s') = q0.Dequeue()
+            if (iter%10000)=0 then
+                eprintfn "%d %d %d" iter d q0.Count
+        
+            if differs s' target |> not then d
+            else                
+                seq {
+                    for i in [0..Array.length s'-2] do
+                        for j in [i+2..Array.length s'] do
+                            let r=reversal s' i j
+                            if (not (State.contains state r 0)) then
+                                State.add state r 0 |> ignore
+                            //let rStr=r|>toString
+                            //if (not (Set.contains rStr state)) then
+                            //    state <- Set.add rStr state
+                                yield r    
+                }
+                |> Seq.map (fun s'' -> (d+1,s''))
+                |> Seq.iter q0.Enqueue 
+                bfsLoop q0
+    let q=new Queue<int*int[]>();
+    q.Enqueue(0,s)
+    bfsLoop q
+
+
+
 getData "rear"
 |> splitNewline
 |> Seq.map (fun s -> s.Split ' '|> Seq.map int|>Array.ofSeq)
-//|> Seq.take 4
+//|> Seq.take 2
 |> Array.ofSeq
 |> fun a ->
     seq {
         for i in [0 .. 2 .. a.Length-1] do
-            yield rear3 a.[i] a.[i+1]
+            yield rear4 a.[i] a.[i+1]
         }
 |> Seq.map string
 |> String.concat " "
