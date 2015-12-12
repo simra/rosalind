@@ -49,6 +49,24 @@ let rec C n k =
         |> Seq.reduce (*)
         |> int64
 
+open System.Collections.Generic
+ // some handy dynamic programming snippets from http://www.fssnip.net/8P
+ /// The function creates a function that calls the argument 'f'
+ /// only once and stores the result in a mutable dictionary (cache)
+ /// Repeated calls to the resulting function return cached values.
+let memoize f =    
+   // Create (mutable) cache that is used for storing results of 
+   // for function arguments that were already calculated.
+    let cache = new Dictionary<_, _>()
+    (fun x ->
+       // The returned function first performs a cache lookup
+       let succ, v = cache.TryGetValue(x)
+       if succ then v else 
+         // If value was not found, calculate & cache it
+         let v = f(x) 
+         cache.Add(x, v)
+         v)
+
 
 // 1. DNA
 
@@ -1112,23 +1130,6 @@ getData "tree"
 // In the end the solution is very easy: there are a limited number of split points which have equal 
 // pairings on both the left and the right.  Find those splits and count up. function could only be 
 // improved with proper dynamic accounting.
-open System.Collections.Generic
- // some handy dynamic programming snippets from http://www.fssnip.net/8P
- /// The function creates a function that calls the argument 'f'
- /// only once and stores the result in a mutable dictionary (cache)
- /// Repeated calls to the resulting function return cached values.
-let memoize f =    
-   // Create (mutable) cache that is used for storing results of 
-   // for function arguments that were already calculated.
-    let cache = new Dictionary<_, _>()
-    (fun x ->
-       // The returned function first performs a cache lookup
-       let succ, v = cache.TryGetValue(x)
-       if succ then v else 
-         // If value was not found, calculate & cache it
-         let v = f(x) 
-         cache.Add(x, v)
-         v)
 
 let isComplement c1 c2 =
     (c1='A' && c2='U')
@@ -1565,7 +1566,7 @@ let rear4 (target:int[]) (s:int[]) =
     bfsLoop q
 
 
-
+// As noted above: see the project rear in this solution.
 getData "rear"
 |> splitNewline
 |> Seq.map (fun s -> s.Split ' '|> Seq.map int|>Array.ofSeq)
@@ -1580,7 +1581,84 @@ getData "rear"
 |> String.concat " "
 |> printfn "%s"
 
+getData "rstr"
+|> splitNewline
+|> fun toks ->
+    (toks.[0].Split(' '),toks.[1])
+|> fun (toks,str) -> (float toks.[0],float toks.[1],str)
+|> fun (N,cg,str) ->
+    str
+    |> Seq.map 
+        // first, the probability of drawing this string once.
+        (fun c -> 
+            let pA=(1.-cg)/2.
+            let pT=pA
+            let pC=cg/2.
+            let pG=cg/2.
+            match c with 
+            | 'C' | 'G' -> pC
+            | 'A' | 'T' -> pA
+            | _ -> raise (new Exception "foo")
+        )
+    |> Seq.reduce (*)
+    // then, the probability of not ever drawing this string.
+    |> (fun x-> (1.-x)**N)
+    // ... whose inverse is the probability of drawing this string at least once.
+    |> (-) 1.
+|> printfn "%f"
 
+//getData "sset"
+823
+|> Seq.unfold 
+    (fun i ->
+        if (i=0) then None
+        else Some (2,i-1))
+|> Seq.reduce (fun a b -> (a*b)%1000000)
+
+// apsc: sum_k=m^n C(n,k)
+(*let rec Cmod modulus n k =
+    if k=0L || k=n then 1L
+    else if k>=(n/2L+1L) then C n (n-k)
+    else 
+        [1L..k]
+        |> Seq.map (fun i -> (float (n-k+i))/(float i))
+        |> Seq.reduce (*)
+        |> int64 *)
+
+// what makes this tricky is the modulus.
+// https://en.wikipedia.org/wiki/Pascal%27s_triangle
+// C n k = C (n-1) (k-1) + C (n-1) k
+let rec Cmod =
+    memoize 
+        (fun (m,n,k)->
+            if k=1L then (n % m)
+            else if k=n || k=0L then (1L)
+            else ((Cmod (m,(n-1L),(k-1L))) + (Cmod (m,(n-1L),k))) % m 
+            )
+
+(1629L, 1393L)
+|> fun (n,m) -> 
+    [m..n]    
+    |> Seq.map (fun k -> Cmod (1000000L, n, k))
+    |> Seq.reduce (fun a b -> (a + b)%1000000L)
+    
+// edit
+let editDistance (a:string) (b:string) =
+    let rec lev = 
+        memoize 
+            (fun (i,j) ->
+                if min i j = 0 then max i j
+                else
+                    lev (i-1,j) + 1
+                    |> min (lev (i,j-1) + 1)
+                    |> min (lev(i-1,j-1) + (if a.[i-1]=b.[j-1] then 0 else 1)))
+    lev (a.Length,b.Length)
+
+getData "edit"
+|> parseFasta
+|> Array.ofSeq
+|> fun t -> editDistance (t.[0].String) (t.[1].String)
+|> printfn "%d"
 
 [<EntryPoint>]
 let main argv = 
