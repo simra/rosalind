@@ -1660,6 +1660,29 @@ getData "edit"
 |> fun t -> editDistance (t.[0].String) (t.[1].String)
 |> printfn "%d"
 
+// eval
+getData "eval"
+|> splitNewline
+|> fun toks -> (float toks.[0],toks.[1], toks.[2].Split(' ')|>Seq.map float)
+|> fun (n,str,gcSeq) ->    
+    gcSeq
+    |> Seq.map 
+        (fun gc ->
+            let p=
+                [('A',(1.-gc)/2.)
+                 ('T',(1.-gc)/2.)
+                 ('C',gc/2.)
+                 ('G',gc/2.)]
+                |> Map.ofList
+            str
+            |> Seq.map (fun c -> p.[c])
+            |> Seq.reduce (*)
+            |> (*) (n+1.-float str.Length))
+|> Seq.map string
+|> String.concat " "
+|> printfn "%s"
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
