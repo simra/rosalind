@@ -1705,7 +1705,49 @@ getData "motz"
 |> fun x -> motz x.String
 |> printfn "%d"    
 
+let rec scsp =
+    memoize  (fun (s1,s2) ->
+        if (s1="") then s2
+        else if s2="" then s1
+        else if (s1.[0]=s2.[0]) then 
+            (string s1.[0])+scsp (s1.Substring(1),s2.Substring(1))
+        else
+            let a=(string s1.[0])+scsp (s1.Substring(1),s2)
+            let b=(string s2.[0])+scsp (s1,s2.Substring(1))
+            if a.Length<b.Length then a
+            else b
+            )
 
+getData "scsp"
+|> splitNewline
+|> Array.ofSeq
+|> fun t -> scsp (t.[0],t.[1]) 
+|> printfn "%s"
+
+getData "seto"
+|> splitNewline
+|> Array.ofSeq
+|> fun t -> 
+    let makeSet (s:string) = 
+        s.Split([|',';' ';'{';'}'|],StringSplitOptions.RemoveEmptyEntries)
+        |> Seq.map int
+        |> Set.ofSeq
+    (Set.ofList [1..int t.[0]],makeSet t.[1],makeSet t.[2])
+|> fun (U,X,Y) ->
+    let except Z V =
+        Seq.fold (fun W e -> if Set.contains e W then Set.remove e W else W) Z V
+    (Set.union X Y, Set.intersect X Y, except X Y, except Y X, except U X, except U Y)
+|> fun (a,b,c,d,e,f) ->
+    let printSet s =
+        Seq.map string s
+        |> String.concat ", "
+        |> printfn "{%s}"
+    printSet a
+    printSet b
+    printSet c
+    printSet d
+    printSet e
+    printSet f
 
 [<EntryPoint>]
 let main argv = 
