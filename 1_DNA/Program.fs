@@ -1683,6 +1683,30 @@ getData "eval"
 |> printfn "%s"
 
 
+// MOTZ
+let rec motz = memoize (fun str ->     
+    if str="" || str.Length=1 then 1L    
+    else
+        let mn1=motz (str.Substring(1))
+
+        [1..str.Length-1] 
+        |> Seq.map 
+            (fun x -> 
+                if isComplement str.[0] str.[x] then 
+                    let (l,r)=splitStr str x
+                    (motz l * motz r)                     
+                else 0L)
+        |> Seq.sum
+        |> fun x -> (mn1+x)%1000000L)
+    
+getData "motz"
+|> parseFasta
+|> Seq.exactlyOne
+|> fun x -> motz x.String
+|> printfn "%d"    
+
+
+
 [<EntryPoint>]
 let main argv = 
     // dna

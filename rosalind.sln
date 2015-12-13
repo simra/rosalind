@@ -7,6 +7,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "1_DNA", "1_DNA\1_DNA.fsproj
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "rear", "rear\rear.fsproj", "{64D40F5F-FCA9-4808-80FA-0F3A4BB89577}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "trees", "trees\trees.fsproj", "{2E50365B-6710-4032-B863-8D36D1CA67E2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{64D40F5F-FCA9-4808-80FA-0F3A4BB89577}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{64D40F5F-FCA9-4808-80FA-0F3A4BB89577}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{64D40F5F-FCA9-4808-80FA-0F3A4BB89577}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E50365B-6710-4032-B863-8D36D1CA67E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E50365B-6710-4032-B863-8D36D1CA67E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E50365B-6710-4032-B863-8D36D1CA67E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E50365B-6710-4032-B863-8D36D1CA67E2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
