@@ -1749,6 +1749,56 @@ getData "seto"
     printSet e
     printSet f
 
+// for SORT see the rear project
+
+// SPEC
+let wtLookup =
+    monomasstbl
+    |> Map.toSeq
+    |> Seq.map (fun (a,m)-> (m,a))
+    |> List.ofSeq
+let lookupWt w =
+    wtLookup
+    |> Seq.map (fun (wt,n)-> abs (w-wt),n)
+    |> Seq.minBy (fun (d,n) -> d)
+
+
+getData "spec"
+|> splitNewline
+|> Seq.map float
+|> List.ofSeq
+|> fun (head::tail) ->
+    List.scan 
+        (fun (lastc:string,lastw:float) w -> 
+            let (delta,name)=lookupWt (w-lastw)
+            (name,w)) ("*",head) tail
+|> fun (head::tail) -> tail
+|> List.map (fun (s,w) -> s)
+|> String.concat ""
+|> printfn "%s"
+
+// TRIE
+let mutable vertexCount=1
+let rec buildTrie (p:int) (l:string seq) =
+    l
+    |> Seq.filter (fun s -> s.Length>0)
+    |> Seq.groupBy (fun s -> s.[0])
+    |> Seq.iter (fun (a,ll) -> 
+        vertexCount<-vertexCount+1
+        printfn "%d %d %c" p vertexCount a
+        ll
+        |> Seq.map (fun s -> s.Substring(1))
+        |> Seq.filter (fun s -> s.Length>0)
+        |> fun s -> if not (Seq.isEmpty s) then buildTrie vertexCount s)
+      
+
+getData "trie"
+|> splitNewline
+|> List.ofSeq
+|> buildTrie 1
+
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
