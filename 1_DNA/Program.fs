@@ -1797,7 +1797,48 @@ getData "trie"
 |> List.ofSeq
 |> buildTrie 1
 
+// conv
+let minkSum m1 m2 =
+    seq {
+        for (k1,v1) in Map.toSeq m1 do
+            for (k2,v2) in Map.toSeq m2 do
+                yield ((k1+k2),v1*v2)
+    }
+    |> Map.ofSeq
+   
+// in practice we need to group by things differing by <epsilon 
+let minkDiff (m1:Map<float,int>) (m2:Map<float,int>) =
+    seq {
+        for (k1,v1) in Map.toSeq m1 do
+            for (k2,v2) in Map.toSeq m2 do
+                yield ((k1-k2),v1*v2)
+    }
+    |> Seq.groupBy (fun (a,b)->Math.Round(a,3))
+    |> Seq.map (fun (a,l)->a,l|>Seq.sumBy (fun (b,c)->c))
+    |> Map.ofSeq
+  
+let multiSet (l:float seq) =
+    l
+    |> Seq.countBy id
+    |> Map.ofSeq
 
+let floatList (s:string) =
+    s.Split(' ')
+    |> Seq.map float 
+
+getData "conv"
+|> splitNewline
+|> Array.ofSeq
+|> fun t -> 
+    (floatList t.[0],floatList t.[1])
+|> fun (a,b) ->
+    (multiSet a,multiSet b)
+|> fun (a,b) -> minkDiff a b
+|> Map.toSeq 
+//|> Seq.sortBy (fun (a,b)->a)
+//|> Seq.iter (printfn "%A")
+|> Seq.maxBy (fun (a,b)->b)
+|> fun (a,b) -> printfn "%d\n%f" b (abs a)
 
 [<EntryPoint>]
 let main argv = 
