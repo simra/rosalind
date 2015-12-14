@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 open System.IO
+open System.Text.RegularExpressions
 
 let (@@) folder filename = Path.Combine(folder,filename)
 let data_root = @"c:\GitHub\rosalind\data"
@@ -142,6 +143,85 @@ getData "nwck"
 |> Seq.map string
 |> String.concat " "
 |> printfn "%s"    
+
+// CTBL
+let toEdges t =
+    t
+    |>adjacencies
+    |>Seq.map (fun kvp -> seq { for v in kvp.Value do yield (kvp.Key,v)})
+    |>Seq.concat
+
+let isAnon s = Regex.IsMatch(s,@"anon_\d+")
+
+let getCharRow edges (rem1,rem2) =
+    edges
+    |> Seq.fold 
+        (fun (componentLookup:Map<string,int>,sets:Map<int,string list>,nextIx) (v1,v2) ->
+            if (rem1=v1 && rem2=v2) || (rem1=v2 && rem2=v1) then 
+          //      eprintfn "ignoring %s %s" v1 v2
+                (componentLookup,sets,nextIx)
+            else                    
+                if Map.containsKey v1 componentLookup then
+                    let c1=componentLookup.[v1]
+                    if Map.containsKey v2 componentLookup then
+                        let c2=componentLookup.[v2]
+                        if c1=c2 then (componentLookup,sets,nextIx)
+                        else
+                            if List.length sets.[c2]>List.length sets.[c1] then
+                                let outLookup = Seq.fold (fun m vi -> Map.add vi c2 m) componentLookup sets.[c1]
+                                let outSets = sets|>Map.add c2 (List.concat [sets.[c2];sets.[c1]]) |> Map.remove c1
+                                (outLookup,outSets,nextIx)
+                            else 
+                                let outLookup = Seq.fold (fun m vi -> Map.add vi c1 m) componentLookup sets.[c2]
+                                let outSets = sets|>Map.add c1 (List.concat [sets.[c1];sets.[c2]]) |> Map.remove c2
+                                (outLookup,outSets,nextIx)
+                    else
+                        (Map.add v2 c1 componentLookup, Map.add c1 (v2::sets.[c1]) sets, nextIx)
+                else
+                    if Map.containsKey v2 componentLookup then
+                        let c2=componentLookup.[v2]
+                        (Map.add v1 c2 componentLookup, Map.add c2 (v1::sets.[c2]) sets, nextIx)
+                    else
+                        let newSet=nextIx
+                        (Map.add v1 newSet componentLookup|>Map.add v2 newSet, Map.add newSet [v1;v2] sets, newSet+1)
+                        ) (Map.empty,Map.empty,0)
+    |> fun (componentLookup,sets,_) ->
+      //  eprintfn "Lbls: %d Sets: %d" (Seq.length componentLookup) (Seq.length sets)
+        let ix =
+            sets
+            |> Map.toArray
+            |> Array.map (fun (i,_) -> i)
+            |> fun a -> seq { for i in [0..a.Length-1] do yield (a.[i],i)}
+            |> Map.ofSeq
+        
+        componentLookup
+        |> Map.toSeq
+        |> Seq.filter (fun (s,_) -> not (isAnon s))
+        |> Seq.map (fun (s,v) -> (s,ix.[v]))
+        |> Seq.sortBy (fun (s,v)->s)
+        |> Seq.map (fun (s,v)->v)
+        |> Seq.map string
+        |> String.concat ""
+        
+        
+
+// seems there should be a faster (iterative) way to walk through the edges and relabel vertices
+let ctbl t =
+    let edges=toEdges t
+    //edges  |> Seq.iter (fun (v1,v2)-> printfn "%s %s" v1 v2)
+    edges
+    |> Seq.filter (fun (v1,v2) -> isAnon v1 && isAnon v2) // ignore trivial edges. Note if we don't then the CC code isn't quite right (leafs get dropped).
+    |> Seq.map (getCharRow edges)
+    |> Seq.groupBy id
+    |> Seq.map (fun (k,v)->k)
+    |> Seq.iter (printfn "%s")
+
+
+getData "ctbl"
+|> splitNewline
+|> Seq.exactlyOne
+|> parseTree
+|> ctbl
 
 [<EntryPoint>]
 let main argv = 
