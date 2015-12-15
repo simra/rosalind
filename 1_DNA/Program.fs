@@ -1749,6 +1749,30 @@ getData "seto"
     printSet e
     printSet f
 
+// dbru
+let SSrc S =
+    S
+    |> Set.toSeq
+    |> Seq.map (fun s -> reverseComplement s)
+    |> Set.ofSeq
+    |> Set.union S
+
+let eBk (S:string Set) =
+    let k = Set.toSeq S|> Seq.take(1) |> Seq.exactlyOne |> fun x -> x.Length - 1
+    S
+    |> Set.toSeq
+    |> Seq.map (fun s -> s.Substring(0,k),s.Substring(1))
+    |> Seq.countBy id
+    |> Seq.map (fun (e,v)->e)
+
+getData "dbru"
+|> splitNewline
+|> Set.ofSeq
+|> SSrc
+|> eBk
+|> Seq.iter (fun (v1,v2)->printfn "(%s, %s)" v1 v2)
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
