@@ -127,9 +127,72 @@ let rear4 (target:int[]) (s:int[]) =
     q.Enqueue(0,s)
     bfsLoop q
 
+let sort (target:int[]) (s:int[]) = 
+    //let mutable state=Elements(new Dictionary<int,State>())//Set.add (s|>toString) Set.empty
+    let mutable state = new State()
+    let mutable iter=0
+    let allperms =
+        seq {
+            for i in [0..Array.length s-2] do
+                for j in [i+2..Array.length s] do
+                    yield (i,j)
+        }
+        |> List.ofSeq
+    let lex =
+        let s=Array.create target.Length 0
+        for i in [0..s.Length-1] do
+            s.[target.[i]-1]<-i
+        s
 
-[<EntryPoint>]
-let main argv = 
+    let rec bfsLoop (q0:Queue<(int*int) list*int[]>) =
+        iter<- iter+1
+        if q0.Count=0 then
+            raise (new Exception "No solution")
+        else 
+            let (l,s') = q0.Dequeue()
+            if (iter%10000)=0 then
+                eprintfn "%d %d %d" iter (List.length l) q0.Count
+        
+            if differs s' target |> not then l
+            else   
+                seq {
+                    for (i,j) in allperms do
+                        if lex.[s'.[i]-1]>lex.[s'.[j-1]-1] then
+                            let r=reversal s' i j
+                            let br=toBigint r
+                            if (not (state.Contains(br))) then
+                                state.Add(br)|>ignore
+                                yield ((i,j),r)    
+                }
+                 
+                |> Seq.iter ( // still needs short circuit.
+                    fun (p,r) -> q0.Enqueue (p::l,r) )
+                
+                (*
+                allperms // not clear this speeds things up..
+                |> Seq.map 
+                    (fun (i,j) ->
+                        if lex.[s'.[i]-1]>lex.[s'.[j-1]-1] then // only expand things that swap out-of-order values.
+                            Some (async { 
+                                let r = reversal s' i j
+                                return (r,state.Contains(toBigint r))//State.contains state r 0)
+                            })
+                        else None)
+                |> Seq.choose id
+                |> Async.Parallel
+                |> Async.RunSynchronously
+                |> Seq.filter (fun (_,b)->not b)
+                |> Seq.iter (fun (r,_) -> 
+                    //State.add state r 0 |> ignore
+                    state.Add(toBigint r)|>ignore
+                    // how to short-circuit out?
+                    q0.Enqueue (d+1,r) ) *)
+                bfsLoop q0
+    let q=new Queue<(int*int) list*int[]>();
+    q.Enqueue([],s)
+    bfsLoop q
+
+let doRear() =
     getData "rear"
     |> splitNewline
     |> Seq.map (fun s -> s.Split ' '|> Seq.map int|>Array.ofSeq)
@@ -145,4 +208,20 @@ let main argv =
     |> Seq.map string
     |> String.concat " "
     |> printfn "%s"
+ 
+let doSort() =
+    getData "sort"
+    |> splitNewline
+    |> Seq.map (fun s -> s.Split ' '|> Seq.map int|>Array.ofSeq)  
+    |> Array.ofSeq
+    |> fun a -> sort a.[0] a.[1]
+    |> fun l -> 
+        printfn "%d" (List.length l)
+        l 
+    |> List.map (fun (i,j) -> sprintf "%d %d" (i+1) j)
+    |> Seq.iter (printfn "%s")
+       
+
+[<EntryPoint>]
+let main argv = 
     0 // return an integer exit code

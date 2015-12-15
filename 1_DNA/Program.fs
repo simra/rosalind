@@ -1749,6 +1749,97 @@ getData "seto"
     printSet e
     printSet f
 
+// for SORT see the rear project
+
+// SPEC
+let wtLookup =
+    monomasstbl
+    |> Map.toSeq
+    |> Seq.map (fun (a,m)-> (m,a))
+    |> List.ofSeq
+let lookupWt w =
+    wtLookup
+    |> Seq.map (fun (wt,n)-> abs (w-wt),n)
+    |> Seq.minBy (fun (d,n) -> d)
+
+
+getData "spec"
+|> splitNewline
+|> Seq.map float
+|> List.ofSeq
+|> fun (head::tail) ->
+    List.scan 
+        (fun (lastc:string,lastw:float) w -> 
+            let (delta,name)=lookupWt (w-lastw)
+            (name,w)) ("*",head) tail
+|> fun (head::tail) -> tail
+|> List.map (fun (s,w) -> s)
+|> String.concat ""
+|> printfn "%s"
+
+// TRIE
+let mutable vertexCount=1
+let rec buildTrie (p:int) (l:string seq) =
+    l
+    |> Seq.filter (fun s -> s.Length>0)
+    |> Seq.groupBy (fun s -> s.[0])
+    |> Seq.iter (fun (a,ll) -> 
+        vertexCount<-vertexCount+1
+        printfn "%d %d %c" p vertexCount a
+        ll
+        |> Seq.map (fun s -> s.Substring(1))
+        |> Seq.filter (fun s -> s.Length>0)
+        |> fun s -> if not (Seq.isEmpty s) then buildTrie vertexCount s)
+      
+
+getData "trie"
+|> splitNewline
+|> List.ofSeq
+|> buildTrie 1
+
+// conv
+let minkSum m1 m2 =
+    seq {
+        for (k1,v1) in Map.toSeq m1 do
+            for (k2,v2) in Map.toSeq m2 do
+                yield ((k1+k2),v1*v2)
+    }
+    |> Map.ofSeq
+   
+// in practice we need to group by things differing by <epsilon 
+let minkDiff (m1:Map<float,int>) (m2:Map<float,int>) =
+    seq {
+        for (k1,v1) in Map.toSeq m1 do
+            for (k2,v2) in Map.toSeq m2 do
+                yield ((k1-k2),v1*v2)
+    }
+    |> Seq.groupBy (fun (a,b)->Math.Round(a,3))
+    |> Seq.map (fun (a,l)->a,l|>Seq.sumBy (fun (b,c)->c))
+    |> Map.ofSeq
+  
+let multiSet (l:float seq) =
+    l
+    |> Seq.countBy id
+    |> Map.ofSeq
+
+let floatList (s:string) =
+    s.Split(' ')
+    |> Seq.map float 
+
+getData "conv"
+|> splitNewline
+|> Array.ofSeq
+|> fun t -> 
+    (floatList t.[0],floatList t.[1])
+|> fun (a,b) ->
+    (multiSet a,multiSet b)
+|> fun (a,b) -> minkDiff a b
+|> Map.toSeq 
+//|> Seq.sortBy (fun (a,b)->a)
+//|> Seq.iter (printfn "%A")
+|> Seq.maxBy (fun (a,b)->b)
+|> fun (a,b) -> printfn "%d\n%f" b (abs a)
+
 // dbru
 let SSrc S =
     S
@@ -1771,7 +1862,6 @@ getData "dbru"
 |> SSrc
 |> eBk
 |> Seq.iter (fun (v1,v2)->printfn "(%s, %s)" v1 v2)
-
 
 [<EntryPoint>]
 let main argv = 
