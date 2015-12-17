@@ -1875,7 +1875,7 @@ let generatePairs head tail =
             for i in [0..a.Length/2-1] do
                 yield (a.[i], a.[a.Length-i-1])
         }
-
+        (*
 let costPE pe =
     pe
     |> Seq.map (fun ((a,b),e) -> if e= -1 then (b,a) else (a,b))
@@ -1884,8 +1884,8 @@ let costPE pe =
     |> fun ((a,b)::tail) -> Seq.scan (fun (c,prev) (curr,_) -> (curr-prev,curr)) (0.,a) tail
     |> Seq.skip 1
     |> Seq.map (fun (delta,_) -> lookupWt delta)
-    |> Seq.reduce (fun (resid1,n1) (resid2,n2)->(resid1+resid2),(string n1)+(string n2) )
-    
+    |> Seq.reduce (fun (resid1,n1) (resid2,n2)->(resid1+resid2),(string n1)+(string n2) ) *)
+    (*
 let rec inferCuts pairs =
     // need to find an ordering of pairs that minimizes wt error
     // left side must be strictly increasing, but the pairs may be swapped.
@@ -1908,7 +1908,7 @@ let rec inferCuts pairs =
                     )
             |> Seq.minBy (fun (k,r,n)->r)
         let rest = List.filter (fun ( -> best tail // filter won't work: we only want to remove one.
-
+        *)
     
     (*
     let enum=enumerate pCount
@@ -1919,6 +1919,61 @@ let rec inferCuts pairs =
     |> Seq.map costPE
     |> Seq.minBy (fun (resid,n)->resid)
     |> fun (r,n) ->n
+    *)
+
+let costSplits (a:(int*(float*float))[]) =
+    seq {
+        for i in [1..a.Length-1] do
+            let (p1,(pa,pb))=a.[i-1]
+            let (cu,(ca,cb))=a.[i]
+            let comparer1=if p1=0 then pa else pb
+            let comparer2=if cu=0 then ca else cb
+            let (c1,_)=lookupWt (comparer2-comparer1)
+            yield c1    
+    }
+    |> Seq.sum
+    
+// need a better method to track the cost of flipping- not O(n!)
+let resort a = a|>Array.sortInPlaceBy (fun (s,(a,b)) -> if s=0 then a else b) 
+    
+let minimizeCost (a:(int*(float*float))[]) i =
+    let c1=costSplits a
+    let a'=Array.copy a
+    let (curr,p)=a'.[i]
+    a'.[i]<-(1-curr,p)
+    resort a'
+    let c2=costSplits a'
+    if (c2<c1) then
+        (true,a')
+    else (false,a)
+
+let inferCuts (pairs:(float*float) seq)
+    seq {
+        for (a,b) in pairs
+            for (c,d) in pairs
+                if (a,b)<>(c,d) then
+                    let (c,n)=lookupWt (abs (c-a))
+                    if (c<0.001) then yield (n,c,)
+    
+
+    (*
+let inferCuts (a:(float*float) seq) =
+    let mutable changed = true
+    let mutable a' = a|> Seq.map (fun x -> 0,x) |> Array.ofSeq   
+    resort a'
+    while changed do        
+        for i in [1..a'.Length-1] do
+            let (ch,b)=minimizeCost a' i
+            changed<-ch
+            a'<-b
+    seq {
+        for i in [1..a'.Length-1] do
+            let (c1,(a,b))=a'.[i-1]
+            let (c2,(c,d))=a'.[i]
+            yield lookupWt ((if c2=0 then c else d)-(if c1=0 then a else b))               
+    }
+    |> Seq.map (fun (_,n)->n)
+    |> Seq.reduce (+)
     *)
 
 getData "full"
