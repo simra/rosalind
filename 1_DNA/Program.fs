@@ -1866,123 +1866,80 @@ getData "dbru"
 |> Seq.iter (fun (v1,v2)->printfn "(%s, %s)" v1 v2)
 
 // FULL
-let generatePairs head tail =
-    tail
-    |> Seq.sort
-    |> Array.ofSeq    
-    |> fun a -> 
-        seq { 
-            for i in [0..a.Length/2-1] do
-                yield (a.[i], a.[a.Length-i-1])
-        }
-        (*
-let costPE pe =
-    pe
-    |> Seq.map (fun ((a,b),e) -> if e= -1 then (b,a) else (a,b))
-    |> Seq.sortBy (fun (a,b)->a)
+
+// Bears some explanation. Took several attempts. In the end the solution is not too complex.
+(*
+    When sorted the b- and y- ions are at complementary ends of the array, but we don't know which is which (b may be on the left or the right.
+    First we difference across all pairs of floats to find things that look like molecular weights, within some error.
+    Build up these pairs as (i,j,err,molecule) tuples
+    Any valid solution is one that walks through the edges induced by (i,j) starting from 0, building up a string of length n.
+    The only other caveat is that as we visit index i we have to filter out its complement, since that can't be a b-ion now- hence the set updates
+    Can produce multiple valid solutions, depending on your error tolerance.
+*)
+let full s =
+    let a= 
+        s
+        |> Seq.skip 1 // first number is the parent mass, which we don't need unless we want to validate a.
+        |> Array.ofSeq
+    let tbl =
+        a
+        |> Array.sort
+        |> fun a -> seq {
+                for i in [0..a.Length-1] do
+                    for j in [i+1..a.Length-1] do
+                        let (w,c)=lookupWt (a.[j]-a.[i])  
+                        if (w<0.001) then // we could also filter complements here and make it a tiny bit faster.
+                            yield (i,j,w,c)
+                }
+        |> Seq.groupBy (fun (i,_,_,_)->i)
+        |> Seq.map (fun (i,s)-> i,s|>Seq.map (fun (i,j,w,c) -> (j,w,c)) |> Seq.sortBy (fun (j,w,c)->w)|>List.ofSeq)
+        |> Map.ofSeq
+
+    let indexes=[1..a.Length-1]|>Set.ofList // drop 0 since it's the first item (we are 'visiting' it now)
+    
+    let rec helper (remaining,curr,n) =
+        let c=(Set.count remaining)/2 
+        eprintfn "c: %d n: %d" c n
+        eprintfn "%A" remaining
+        if (c<n) then []
+        else if n=0 then [(0.,"")]
+        else             
+            tbl.[curr]
+            |>List.filter (fun (j,w,c) -> Set.contains j remaining)
+            |> List.map (fun (j,w,c) -> 
+                let r2=remaining|>Set.remove j |> Set.remove (a.Length-j-1)
+                let strs=helper (r2,j,(n-1))
+                strs|> List.map (fun (w1,s) ->(w+w1,c+s)))
+            |> List.concat
+            
+    helper (indexes,0,a.Length/2-1)
+    (*
+    Seq.unfold (fun (remaining,curr,str) ->
+        printfn "%A" remaining
+        if (Set.isEmpty remaining || not (Map.containsKey curr tbl)) then None // latter indicates end of list.
+        else 
+            let result=
+                tbl.[curr]|>List.filter (fun (_,(j,_,_,(_,_))) -> Set.contains j remaining)
+            match result with
+            | [] -> None
+            | (_,(j,_,_,(_,n))) :: tail ->                 
+                Some (str+n,(Set.remove j remaining |> Set.remove (a.Length-j-1), j, str+n))) (indexes,0,"")
     |> List.ofSeq
-    |> fun ((a,b)::tail) -> Seq.scan (fun (c,prev) (curr,_) -> (curr-prev,curr)) (0.,a) tail
-    |> Seq.skip 1
-    |> Seq.map (fun (delta,_) -> lookupWt delta)
-    |> Seq.reduce (fun (resid1,n1) (resid2,n2)->(resid1+resid2),(string n1)+(string n2) ) *)
-    (*
-let rec inferCuts pairs =
-    // need to find an ordering of pairs that minimizes wt error
-    // left side must be strictly increasing, but the pairs may be swapped.
-    //let pCount=Seq.length pairs
-    // enumerate too expensive. 2^98.
-    // DP?  Make local choices that fit the mass table? Can we exploit minkowski sums?
-    // without loss of generality we can fix the smallest mass at the start and walk down the line flipping pairs to get the best match.
-    // brute force is N^2. maybe doable.
-    match pairs with
-    | [] -> []
-    | head :: tail ->
-        let (a,b)=head
-        let best = 
-            tail
-            |> Seq.map (fun (c,d) ->
-                        let (r1,n1)=lookupWt (c-a)
-                        let (r2,n2)=lookupWt (d-a)
-                        [(c,r1,n1);(d,r2,n2)]
-                        |> Seq.minBy (fun (k,r,n)-> r)
-                    )
-            |> Seq.minBy (fun (k,r,n)->r)
-        let rest = List.filter (fun ( -> best tail // filter won't work: we only want to remove one.
-        *)
-    
-    (*
-    let enum=enumerate pCount
-    eprintfn "PCount: %d enum: %d" pCount (Seq.length enum)
-    
-    enum 
-    |> Seq.map (fun e -> Seq.zip pairs e)
-    |> Seq.map costPE
-    |> Seq.minBy (fun (resid,n)->resid)
-    |> fun (r,n) ->n
+    |> List.rev
+    |> fun (head::tail)->head
     *)
-
-let costSplits (a:(int*(float*float))[]) =
-    seq {
-        for i in [1..a.Length-1] do
-            let (p1,(pa,pb))=a.[i-1]
-            let (cu,(ca,cb))=a.[i]
-            let comparer1=if p1=0 then pa else pb
-            let comparer2=if cu=0 then ca else cb
-            let (c1,_)=lookupWt (comparer2-comparer1)
-            yield c1    
-    }
-    |> Seq.sum
-    
-// need a better method to track the cost of flipping- not O(n!)
-let resort a = a|>Array.sortInPlaceBy (fun (s,(a,b)) -> if s=0 then a else b) 
-    
-let minimizeCost (a:(int*(float*float))[]) i =
-    let c1=costSplits a
-    let a'=Array.copy a
-    let (curr,p)=a'.[i]
-    a'.[i]<-(1-curr,p)
-    resort a'
-    let c2=costSplits a'
-    if (c2<c1) then
-        (true,a')
-    else (false,a)
-
-let inferCuts (pairs:(float*float) seq)
-    seq {
-        for (a,b) in pairs
-            for (c,d) in pairs
-                if (a,b)<>(c,d) then
-                    let (c,n)=lookupWt (abs (c-a))
-                    if (c<0.001) then yield (n,c,)
-    
-
-    (*
-let inferCuts (a:(float*float) seq) =
-    let mutable changed = true
-    let mutable a' = a|> Seq.map (fun x -> 0,x) |> Array.ofSeq   
-    resort a'
-    while changed do        
-        for i in [1..a'.Length-1] do
-            let (ch,b)=minimizeCost a' i
-            changed<-ch
-            a'<-b
-    seq {
-        for i in [1..a'.Length-1] do
-            let (c1,(a,b))=a'.[i-1]
-            let (c2,(c,d))=a'.[i]
-            yield lookupWt ((if c2=0 then c else d)-(if c1=0 then a else b))               
-    }
-    |> Seq.map (fun (_,n)->n)
-    |> Seq.reduce (+)
-    *)
-
 getData "full"
 |> splitNewline
 |> Seq.map float
+|> full
+|> printfn "%A"
+//|> Seq.sortBy (fun (_,_,_,_,(d,_))->d)
+//|> Seq.iter (printfn "%A")
+   (* 
 |> List.ofSeq
 |> fun (head::tail) -> generatePairs head tail
 |> inferCuts
-|> printfn "%s"
+|> printfn "%s" *)
 //|> Seq.iter (fun (a,b) -> printfn "%A %f" (a,b) (a+b))
 
 //|> orderCuts
