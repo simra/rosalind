@@ -68,6 +68,44 @@ let memoize f =
          v)
 
 
+let monomasstbl = 
+    "A   71.03711
+C   103.00919
+D   115.02694
+E   129.04259
+F   147.06841
+G   57.02146
+H   137.05891
+I   113.08406
+K   128.09496
+L   113.08406
+M   131.04049
+N   114.04293
+P   97.05276
+Q   128.05858
+R   156.10111
+S   87.03203
+T   101.04768
+V   99.06841
+W   186.07931
+Y   163.06333"
+    |> fun x->x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
+    |> Seq.map (fun x-> x.Split([|' '|],StringSplitOptions.RemoveEmptyEntries))
+    |> Seq.map (fun toks-> (toks.[0],Double.Parse(toks.[1])))
+    |> Map.ofSeq
+
+let wtLookup =
+    monomasstbl
+    |> Map.toSeq
+    |> Seq.map (fun (a,m)-> (m,a))
+    |> List.ofSeq
+let lookupWt w =
+    wtLookup
+    |> Seq.map (fun (wt,n)-> abs (w-wt),n)
+    |> Seq.minBy (fun (d,n) -> d)
+
+
+
 // 1. DNA
 
 getData "dna"
@@ -643,32 +681,6 @@ let perm n =
     |> Seq.iter (printfn "%s")
 
 // prtm
-let monomasstbl = 
-    "A   71.03711
-C   103.00919
-D   115.02694
-E   129.04259
-F   147.06841
-G   57.02146
-H   137.05891
-I   113.08406
-K   128.09496
-L   113.08406
-M   131.04049
-N   114.04293
-P   97.05276
-Q   128.05858
-R   156.10111
-S   87.03203
-T   101.04768
-V   99.06841
-W   186.07931
-Y   163.06333"
-    |> fun x->x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
-    |> Seq.map (fun x-> x.Split([|' '|],StringSplitOptions.RemoveEmptyEntries))
-    |> Seq.map (fun toks-> (toks.[0],Double.Parse(toks.[1])))
-    |> Map.ofSeq
-
 let monomass str =
     str
     |> Seq.map (fun c-> monomasstbl.[string c])
@@ -1752,16 +1764,6 @@ getData "seto"
 // for SORT see the rear project
 
 // SPEC
-let wtLookup =
-    monomasstbl
-    |> Map.toSeq
-    |> Seq.map (fun (a,m)-> (m,a))
-    |> List.ofSeq
-let lookupWt w =
-    wtLookup
-    |> Seq.map (fun (wt,n)-> abs (w-wt),n)
-    |> Seq.minBy (fun (d,n) -> d)
-
 
 getData "spec"
 |> splitNewline
@@ -1862,6 +1864,73 @@ getData "dbru"
 |> SSrc
 |> eBk
 |> Seq.iter (fun (v1,v2)->printfn "(%s, %s)" v1 v2)
+
+// FULL
+let generatePairs head tail =
+    tail
+    |> Seq.sort
+    |> Array.ofSeq    
+    |> fun a -> 
+        seq { 
+            for i in [0..a.Length/2-1] do
+                yield (a.[i], a.[a.Length-i-1])
+        }
+
+let costPE pe =
+    pe
+    |> Seq.map (fun ((a,b),e) -> if e= -1 then (b,a) else (a,b))
+    |> Seq.sortBy (fun (a,b)->a)
+    |> List.ofSeq
+    |> fun ((a,b)::tail) -> Seq.scan (fun (c,prev) (curr,_) -> (curr-prev,curr)) (0.,a) tail
+    |> Seq.skip 1
+    |> Seq.map (fun (delta,_) -> lookupWt delta)
+    |> Seq.reduce (fun (resid1,n1) (resid2,n2)->(resid1+resid2),(string n1)+(string n2) )
+    
+let rec inferCuts pairs =
+    // need to find an ordering of pairs that minimizes wt error
+    // left side must be strictly increasing, but the pairs may be swapped.
+    //let pCount=Seq.length pairs
+    // enumerate too expensive. 2^98.
+    // DP?  Make local choices that fit the mass table? Can we exploit minkowski sums?
+    // without loss of generality we can fix the smallest mass at the start and walk down the line flipping pairs to get the best match.
+    // brute force is N^2. maybe doable.
+    match pairs with
+    | [] -> []
+    | head :: tail ->
+        let (a,b)=head
+        let best = 
+            tail
+            |> Seq.map (fun (c,d) ->
+                        let (r1,n1)=lookupWt (c-a)
+                        let (r2,n2)=lookupWt (d-a)
+                        [(c,r1,n1);(d,r2,n2)]
+                        |> Seq.minBy (fun (k,r,n)-> r)
+                    )
+            |> Seq.minBy (fun (k,r,n)->r)
+        let rest = List.filter (fun ( -> best tail // filter won't work: we only want to remove one.
+
+    
+    (*
+    let enum=enumerate pCount
+    eprintfn "PCount: %d enum: %d" pCount (Seq.length enum)
+    
+    enum 
+    |> Seq.map (fun e -> Seq.zip pairs e)
+    |> Seq.map costPE
+    |> Seq.minBy (fun (resid,n)->resid)
+    |> fun (r,n) ->n
+    *)
+
+getData "full"
+|> splitNewline
+|> Seq.map float
+|> List.ofSeq
+|> fun (head::tail) -> generatePairs head tail
+|> inferCuts
+|> printfn "%s"
+//|> Seq.iter (fun (a,b) -> printfn "%A %f" (a,b) (a+b))
+
+//|> orderCuts
 
 [<EntryPoint>]
 let main argv = 
