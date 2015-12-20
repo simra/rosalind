@@ -48,6 +48,24 @@ let rec C n k =
         |> Seq.map (fun i -> (float (n-k+i))/(float i))
         |> Seq.reduce (*)
         |> int64
+(*
+let binom n k p =
+    ((C n k)|>float)*(p**(float k))*((1. - p)**(float k))
+*)
+
+
+let N u s x =
+    let coeff=1./(s*sqrt 2.*Math.PI)
+    let arg = (x-u)**2./(2.*s**2.)
+    coeff * exp (-arg)
+//https://en.wikipedia.org/wiki/Binomial_distribution#Normal_approximation
+
+let binom (p:float) (n:int64) (k:int64) =   
+    //printfn "%f %f %f" p n k
+    if (float n*p>=5. && float n*(1.-p)>=5.) then
+        N (float n*p) (float n*p*(1.-p)) (float k)
+    else
+        float (C n k)*(p**(float k))*((1.0-p)**float (n-k))
 
 open System.Collections.Generic
  // some handy dynamic programming snippets from http://www.fssnip.net/8P
@@ -516,17 +534,6 @@ let binomOld (p:float) n k =
     let n' = float n
     cnk*(p**k')*((1.-p)**(n'-k'))
 
-let N u s x =
-    let coeff=1./(s*sqrt 2.*Math.PI)
-    let arg = (x-u)**2./(2.*s**2.)
-    coeff * exp (-arg)
-//https://en.wikipedia.org/wiki/Binomial_distribution#Normal_approximation
-let binom (p:float) (n:int64) (k:int64) =   
-    //printfn "%f %f %f" p n k
-    if (float n*p>=10. && float n*p*(1.-p)>=10.) then
-        N (float n*p) (float n*p*(1.-p)) (float k)
-    else
-        float (C n k)*(p**(float k))*((1.0-p)**float (n-k))
 
 let probHeteroAtLeastN (p:float) (k:int64) (N:int64) = // p(genome) after k generations. 
     let k' = float k    
@@ -1943,6 +1950,135 @@ getData "full"
 //|> Seq.iter (fun (a,b) -> printfn "%A %f" (a,b) (a+b))
 
 //|> orderCuts
+
+// indc
+// binom is using the normal approximation, and cumulatively the error is too big.
+// but notice for p=0.5 the binomial expression can be written as p^n*\Sum C n k.
+// Much simpler to work in log space and since p is 0.5 the coefficients should be 
+// pretty reasonable when we raise them to the power of 10.
+
+let rec logFact = 
+    memoize (fun (n:int) -> 
+        if n=1 || n=0 then 0.
+        else ((n|>float|>log10) + ((n-1)|>logFact|>float)))
+
+let rec logCnk n k =
+    logFact n - (logFact k) - (logFact (n-k))
+
+let rec logBinomFair n k =
+    // c n k * 0.5^n
+    logCnk n k + (float n * (log10 0.5))
+
+(*
+let rec FactBig =
+    memoize (fun (n:bigint) ->
+        if n=(bigint 1) || n=(bigint 0) then (bigint 1)
+        else n*FactBig (n-bigint 1))
+
+let Cbig n k = 
+    FactBig n /(FactBig k)/(FactBig (n-k))
+
+let binomBigFair n k =
+    Cbig n k / (bigint 2)**(int n)
+*)
+
+let indc n =
+    let m=2*n
+    Seq.unfold (fun (s,k) -> 
+        if k=0 then None
+        else
+            let s' = s + 10. ** logBinomFair m k             
+            Some (s',(s',(k - 1)))) (0.,m)        
+    |> List.ofSeq
+    |> List.rev
+    |> List.map log10 
+    |> List.map (string)//sprintf "%.4f")
+    |> String.concat " "
+    |> printfn "%s"
+indc 42;;    
+
+// itwv
+// Can a pair of strings be interwoven into s?
+// 1. read all the strings.
+// 2. build a trie over the input string sliding a window over substrings 2*max(s) in len.
+// 3. do lookup on pairs of strings, choosing s or t as we advance each character.
+type Trie =
+    | Empty
+    | Leaf
+    | Node of Map<char,Trie>
+
+let rec addToTrie trie chars =
+    //eprintfn "Adding %A" chars
+    match chars with 
+    | [] -> trie
+    | head :: tail ->
+        match trie with
+        | Empty
+        | Leaf ->
+            Map.empty |> Map.add head (addToTrie Empty tail) |> Node  
+        | Node(m) ->
+            let m' =
+                if Map.containsKey head m then m.[head]
+                else Node(Map.empty)
+            m |> Map.add head (addToTrie m' tail) |> Node
+
+let buildTrie2 (strs:string array) =
+    let str=strs.[0]
+    let maxStr = 
+        [1..strs.Length-1]
+        |> Seq.maxBy (fun i -> strs.[i].Length)
+        |> fun i -> strs.[i].Length
+    str
+    |> fun s -> // windowed doesn't work here because it doesn't capture the shortened strings at the end.
+        seq {
+            for i in 0..s.Length-1 do
+                yield s.Substring(i,min (2*maxStr) (s.Length-i))
+        }
+    |> Seq.map (List.ofSeq)
+    |> Seq.fold addToTrie (Trie.Empty)
+    |> fun t -> (strs,t)
+
+let rec canInterweave trie s t =
+    let hasChar c =
+        match trie with
+        | Node(m) ->
+            Map.containsKey c m
+        | _ -> false
+    let iwHelper head tail other =
+        match trie with
+        | Node(m) ->
+            canInterweave m.[head] tail other
+        | _ -> false
+
+    match s with
+    | [] -> 
+        match t with 
+        | []  -> true
+        | head :: tail -> 
+            hasChar head && iwHelper head tail []
+    | shead :: stail ->
+        match t with
+        | [] -> 
+            hasChar shead && iwHelper shead stail []
+        | thead :: ttail ->
+            (hasChar shead && (iwHelper shead stail t))
+            || (hasChar thead && (iwHelper thead ttail s))
+   
+getData "itwv"
+|> splitNewline
+|> Array.ofSeq
+|> buildTrie2 
+|> fun (strs:string array,trie:Trie) ->
+   // eprintfn "%A" trie
+    
+    [1..strs.Length-1]
+    |> Seq.iter (fun s -> 
+        [1..strs.Length-1]
+        |> Seq.map (fun t -> canInterweave trie (strs.[s]|>Seq.toList) (strs.[t]|>Seq.toList))
+        |> Seq.map (fun x -> if x then 1 else 0)
+        |> Seq.map (string)
+        |> String.concat " "
+        |> printfn "%s")
 
 [<EntryPoint>]
 let main argv = 
