@@ -2080,6 +2080,30 @@ getData "itwv"
         |> String.concat " "
         |> printfn "%s")
 
+// lrep
+// 1. build the tree.
+// 2. mark each node with the count of descendents, and its depth.
+// 3. the solution is the deepest node with at least k descendents
+let parseSuffixTree (str:string) (lines:string seq) =
+    lines
+    |> Seq.map (fun l -> l.Split(' '))
+    |> Seq.map (fun toks -> (toks.[0],toks.[1],str.Substring((int toks.[2])-1,int toks.[3])))
+    |> Seq.fold (fun (parentMap:Map<string,string list>,childMap:Map<string,string list>) (v1,v2,s) -> 
+        let safeAdd va vb m =
+            if Map.containsKey va m then Map.add va (vb::m.[va]) m
+            else Map.add va [vb] m
+        (safeAdd v2 v1 parentMap),(safeAdd v1 v2 childMap)
+        ) (Map.empty,Map.empty)
+
+    
+
+
+getData "lrep"
+|> splitNewline
+|> Array.ofSeq
+|> fun toks -> (toks.[0],toks.[1],parseSuffixTree toks.[0] toks.[2..])
+|> 
+
 [<EntryPoint>]
 let main argv = 
     // dna
