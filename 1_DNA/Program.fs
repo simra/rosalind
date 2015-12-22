@@ -2084,26 +2084,47 @@ getData "itwv"
 // 1. build the tree.
 // 2. mark each node with the count of descendents, and its depth.
 // 3. the solution is the deepest node with at least k descendents
+type AdjList<'d> = Map<string,(string*'d) list>
 let parseSuffixTree (str:string) (lines:string seq) =
     lines
     |> Seq.map (fun l -> l.Split(' '))
     |> Seq.map (fun toks -> (toks.[0],toks.[1],str.Substring((int toks.[2])-1,int toks.[3])))
-    |> Seq.fold (fun (parentMap:Map<string,string list>,childMap:Map<string,string list>) (v1,v2,s) -> 
+    |> Seq.fold (fun (parentMap:AdjList<string>,childMap:AdjList<string>) (v1,v2,s) -> 
         let safeAdd va vb m =
-            if Map.containsKey va m then Map.add va (vb::m.[va]) m
-            else Map.add va [vb] m
+            if Map.containsKey va m then Map.add va ((vb,s)::m.[va]) m
+            else Map.add va [(vb,s)] m
         (safeAdd v2 v1 parentMap),(safeAdd v1 v2 childMap)
         ) (Map.empty,Map.empty)
 
-    
+let rec getDepth (p:AdjList<string>,c:AdjList<string>) (v:string) =
+    if (not (Map.containsKey v p)) then 0
+    else 
+        let (pp,s)=List.head p.[v]
+        s.Length + getDepth (p,c) pp
 
+let rec countDescendents (p:AdjList<string>,c:AdjList<string>) (v:string,_) =
+    if (not (Map.containsKey v c)) then 1
+    else 
+        List.sumBy (countDescendents (p,c)) c.[v]
+
+let rec buildStr (p:AdjList<string>,c:AdjList<string>) (v:string) =
+    if (not (Map.containsKey v p)) then ""
+    else 
+        let (pp,s)=List.head p.[v]
+        buildStr (p,c) pp + s
 
 getData "lrep"
 |> splitNewline
 |> Array.ofSeq
-|> fun toks -> (toks.[0],toks.[1],parseSuffixTree toks.[0] toks.[2..])
-|> 
-
+|> fun toks -> (toks.[0],int toks.[1],parseSuffixTree toks.[0] toks.[2..])
+|> fun (s,k,(p,c)) ->
+        c
+        |> Map.toSeq
+        |> Seq.filter (fun (x,_) -> (countDescendents (p,c) (x,""))>=k)
+        |> Seq.maxBy (fun (v,s) -> getDepth (p,c) v)
+        |> fun (v,_) -> buildStr (p,c) v
+|> printfn "%s"
+        
 [<EntryPoint>]
 let main argv = 
     // dna
