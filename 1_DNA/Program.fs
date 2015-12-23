@@ -2125,6 +2125,41 @@ getData "lrep"
         |> fun (v,_) -> buildStr (p,c) v
 |> printfn "%s"
         
+// rnas
+
+let isWobbleComplement c1 c2 =
+    (c1='A' && c2='U')
+    || (c1='U' && c2='A')
+    || (c1='C' && c2='G')
+    || (c1='G' && c2='C')
+    || (c1='U' && c2='G')
+    || (c1='G' && c2='U')
+
+let rec rnas = memoize (fun str ->     
+    if str="" || str.Length=1 then (bigint 1)    
+    else
+        let mn1=rnas (str.Substring(1))
+        // 4 fixes the constraint that str.[0] can't bond with nearby neighbors
+        [4..str.Length-1] 
+        |> Seq.map 
+            (fun x -> 
+                if isWobbleComplement str.[0] str.[x] then                     
+                    let (l,r)=splitStr str x
+                    //eprintfn "%s %s" l r
+                    (rnas l * rnas r)                     
+                else bigint 0)
+        |> Seq.sum
+        |> (+) mn1)
+       // |> fun x -> (mn1+x)%1000000L)
+    
+getData "rnas"
+|> splitNewline
+|> Seq.take 1
+|> Seq.exactlyOne
+|> rnas
+|> printfn "%A"    
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
