@@ -2159,6 +2159,49 @@ getData "rnas"
 |> rnas
 |> printfn "%A"    
 
+// afrq
+// if p(yy)=x what is p(y)?
+// I was thinking too hard about this.  It's very straightforward and best described here:
+// https://en.wikipedia.org/wiki/Hardy%E2%80%93Weinberg_principle
+// Some scratch code illustrating just how too-hard I was thinking...
+// A generative model
+type PopGenotype =
+    { 
+        AA:float
+        Aa:float
+        aa:float
+    }
+    with 
+    static member combine g1 g2 =
+        {
+            // X = X^2 +XY+0.25Y^2
+            AA=g1.AA*(g2.AA+0.5*g2.Aa)+0.5*g1.Aa*(g2.AA+0.5*g2.Aa)
+            // Y = 0.5XY+XZ+0.25Y^2+0.5YZ + 0.5XY+0.25Y^2+XZ+0.5YZ
+            //   = 0.5Y^2+XY+2XZ+YZ
+            Aa=g1.AA*(0.5*g2.Aa+g2.aa)+0.5*g1.Aa*(0.5*g2.Aa+g2.aa)+0.5*g1.Aa*(g2.AA+0.5*g2.Aa)+g1.aa*(g2.AA+0.5*g2.Aa)
+            // Z = 0.25Y^2+YZ+Z^2
+            aa=0.5*g1.Aa*(0.5*g2.Aa+g2.aa)+g1.aa*(0.5*g2.Aa+g2.aa)        
+        }
+    member this.check () = this.AA+this.Aa+this.aa
+
+// p^2 + pq + q^2 = 1.
+// q^2 = input
+// p+q=1
+
+getData "afrq"
+|> splitNewline
+|> Seq.take(1) |> Seq.exactlyOne
+|> fun s -> s.Split(' ')
+|> Seq.map (fun x -> float x)
+|> Seq.map (fun q2 ->
+    let q = sqrt q2
+    let p = 1.-q
+    // result is 2pq + q^2
+    2.*p*q+q2
+    |> string)
+|> String.concat " "
+|> printfn "%s"
+
 
 [<EntryPoint>]
 let main argv = 
