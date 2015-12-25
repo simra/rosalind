@@ -132,6 +132,42 @@ let edta (s:string) (t:string) =
         *)
 
 
+
+let ctea (s:string) (t:string) = 
+    let rpt x = [for i in 1..x do yield "-"]|>String.concat ""   
+    let rec helper = memoize (fun (i:int,j:int) ->
+        //eprintfn "%d %d" i j
+        if i = 0 then
+            if j = 0 then (0,1L)
+            else (j,1L)
+        else if j = 0 then
+            (i,1L)
+        else    
+            seq {
+                let (l1,c1)= helper(i-1,j)
+                yield (1+l1,c1)
+                let (l2,c2)= helper(i,j-1)
+                yield (1+l2,c2)
+                let (l3,c3)= helper(i-1,j-1)
+                let di=if s.[i-1]=t.[j-1] then 0 else 1
+                yield (di+l3,c3)
+            } 
+            |> Seq.groupBy (fun (l,c)->l)
+            |> Seq.minBy (fun (l,s)->l)
+            |> fun (l,s) -> (l,s|>Seq.fold (fun ci (l,c) -> (ci+c)%134217727L) 0L)
+            )
+    helper(s.Length,t.Length)
+
+getData "ctea"
+|> parseFasta
+|> Array.ofSeq
+|> fun toks -> 
+    let s=toks.[0].String
+    let t=toks.[1].String
+    ctea s t 
+|> fun (l,c)->printfn "%d" c 
+
+
 [<EntryPoint>]
 let main argv = 
     getData "edta"
