@@ -2202,6 +2202,42 @@ getData "afrq"
 |> String.concat " "
 |> printfn "%s"
 
+let transpose (s:string seq) =
+    s
+    |> Array.ofSeq
+    |> fun a ->
+        seq {
+            for i in [0..a.[0].Length-1] do
+            yield seq {
+                for j in [0..a.Length-1] do
+                    yield a.[j].[i]
+            }
+       }
+
+let writeCharArray s =
+    s
+    |> Seq.map (fun (cId,vals) -> 
+        vals |> Seq.map (fun (pos,c) -> pos,cId))
+    |> Seq.concat
+    |> Seq.sortBy (fun (pos,cid) -> pos)
+    |> Seq.map (fun (pos,cid)->cid)
+    |> Seq.map string
+    |> String.concat ""
+    |> printfn "%s"
+
+getData "cstr"
+|> splitNewline
+|> transpose
+|> Seq.map (fun nucleotide  -> 
+    nucleotide
+    |> Seq.mapi (fun i c -> (i,c))
+    |> Seq.groupBy (fun (i,c)->c)
+    |> Seq.mapi (fun i (k,v) -> (i, v)))
+// remove trivial cases
+|> Seq.filter (fun s -> ((Seq.length s)>1))// && (s|>Seq.minBy (fun (i,v)->Seq.length v))>1)
+|> Seq.filter (fun s -> (s|>Seq.map (fun (k,v)->Seq.length v)|>Seq.min)>1)
+// 
+|> Seq.iter writeCharArray
 
 [<EntryPoint>]
 let main argv = 
