@@ -2239,6 +2239,30 @@ getData "cstr"
 // 
 |> Seq.iter writeCharArray
 
+// CTEA: see edta project.
+
+// cunr
+let rec FactBig =
+    memoize (fun (n:bigint) ->
+        if n=(bigint 1) || n=(bigint 0) then (bigint 1)
+        else n*(FactBig (n-bigint 1)))
+
+let Cbig n k = 
+    (FactBig n) /(FactBig k)/(FactBig (n-k))
+
+let rec powBig =
+    memoize (fun (x:int64,y:int64) ->
+    if y=0L then bigint 1
+    else (bigint x)*(powBig (x,(y-1L))))
+
+let cunr n =
+    // https://en.wikipedia.org/wiki/Unrooted_binary_tree#Enumeration
+    // How would we do this without bigint? Logs?
+            if n < 3L then 1L 
+            else
+                FactBig (bigint (2L*n-4L))/(FactBig (bigint (n-2L)))/(powBig (2L,(n-2L)))%(bigint 1000000)|>int64
+  
+
 // pcov is highly simplified- no reverse complements and the input has only one cycle.
 // for perf reasons we may need a suffix tree.
 getData "pcov"
@@ -2262,8 +2286,6 @@ getData "pcov"
 |> List.ofSeq
 |> List.rev
 |> fun (s::tail) -> printfn "%s" s   
-    
-
 
 
 [<EntryPoint>]
