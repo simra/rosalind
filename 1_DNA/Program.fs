@@ -2239,6 +2239,33 @@ getData "cstr"
 // 
 |> Seq.iter writeCharArray
 
+// pcov is highly simplified- no reverse complements and the input has only one cycle.
+// for perf reasons we may need a suffix tree.
+getData "pcov"
+|> splitNewline
+|> fun strs ->
+    strs.[0],
+    strs
+    |> Seq.fold (fun m s ->
+        Map.add s (strs|>Seq.filter (fun s2 -> s2.StartsWith(s.Substring(1)))|>List.ofSeq) m
+        ) Map.empty
+|> fun (seed,m) ->
+    Seq.unfold (fun (cumulative,current,covered) -> 
+        eprintfn "Cum: %s Curr: %s M[s]: %A" cumulative current m.[current]
+        if Set.contains current covered then None
+        else
+            match (m.[current]) with 
+            | head::tail -> 
+                let c' = cumulative+head.Substring(head.Length-1)
+                Some(c',(c',head,Set.add current covered))
+        ) ("",seed,Set.empty)
+|> List.ofSeq
+|> List.rev
+|> fun (s::tail) -> printfn "%s" s   
+    
+
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
