@@ -2318,7 +2318,40 @@ getData "prsm"
     |> Seq.map (fun (p,d) -> (p,(d|>Map.toSeq|>Seq.maxBy (fun (k,v)->v) )|> fun (f,i)->i))
     |> Seq.maxBy (fun (p,d) -> d)
     |> fun (p,d)-> printfn "%d\n%s" d p
-   
+
+// qrt
+let enumeratePairs (s:string seq) =
+    s
+    |> Array.ofSeq
+    |> fun a -> seq {
+        for i in [0..a.Length-1] do
+            for j in [i+1..a.Length-1] do
+                yield (sprintf "{%s, %s}" a.[i] a.[j])
+        }
+    
+let enumerateQuartets (taxa:string[]) ctbl =
+    ctbl
+    |> Seq.mapi (fun i c -> taxa.[i],c) 
+    |> Seq.groupBy (fun (t,c)->c)
+    |> Seq.filter (fun (i,c)->i<>'x')
+    |> Seq.map (fun (i,s) -> s|> Seq.map (fun (t,c)->t))
+    |> Seq.map enumeratePairs
+    |> Array.ofSeq
+    |> fun a -> cross (fun s1 s2 -> sprintf "%s %s" s1 s2) a.[0] a.[1]
+    
+
+
+getData "qrt" 
+|> splitNewline
+|> fun arr ->
+    let taxa=arr.[0].Split(' ')
+    arr.[1..]
+    |> Seq.map (enumerateQuartets taxa)
+    |> Seq.concat
+    |> Seq.countBy id // we can get away with this because we have strict ordering in the taxa mapping
+    |> Seq.map (fun (s,i)->s)
+    |> Seq.iter (printfn "%s")
+  
 
 
 [<EntryPoint>]
