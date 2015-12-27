@@ -2351,7 +2351,43 @@ getData "qrt"
     |> Seq.countBy id // we can get away with this because we have strict ordering in the taxa mapping
     |> Seq.map (fun (s,i)->s)
     |> Seq.iter (printfn "%s")
-  
+
+// SGRA  
+let sgra (s:float seq) =
+    // borrowed from "full"
+    let tbl =
+        s
+        |> Array.ofSeq
+        |> Array.sort
+        |> fun a -> seq {
+                for i in [0..a.Length-1] do
+                    for j in [i+1..a.Length-1] do
+                        let (w,c)=lookupWt (a.[j]-a.[i])  
+                        if (w<0.0001) then // we could also filter complements here and make it a tiny bit faster.
+                            yield (i,j,c)
+                }
+        |> Seq.groupBy (fun (i,j,c)->i)
+    let m = tbl|>Map.ofSeq
+    let rec walkGraph =
+        memoize (fun i ->
+        if not (Map.containsKey i m) then seq{yield ""}
+        else
+            seq {
+                for (_,j,c) in m.[i] do
+                    for c2 in walkGraph j do
+                        yield c+c2
+            })
+    
+    tbl
+    |> Seq.map (fun (i,_)-> walkGraph i)
+    |> Seq.concat
+    |> Seq.maxBy (fun s -> s.Length)
+
+getData "sgra"
+|> splitNewline
+|> Seq.map float
+|> sgra
+|> printfn "%s"
 
 
 [<EntryPoint>]
