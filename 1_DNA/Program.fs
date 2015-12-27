@@ -2288,6 +2288,39 @@ getData "pcov"
 |> fun (s::tail) -> printfn "%s" s   
 
 
+// prsm
+let computeSpectrum (s:string) =
+    let computeWt (s':string) =
+        s'
+        |> Seq.map string
+        |> Seq.map (fun x -> monomasstbl.[x])
+        |> Seq.sum
+
+    [0..s.Length]
+    |> Seq.map (fun i -> [s.Substring(0,i);s.Substring(i,s.Length-i)])
+    |> Seq.concat
+    |> Seq.map computeWt
+    |> multiSet
+
+getData "prsm"
+|> splitNewline
+|> fun arr ->
+    let protCount = int arr.[0]
+    let proteins = 
+        arr.[1..protCount]
+        |> Seq.map (fun p -> (p,computeSpectrum p))
+    let spectrum =
+        arr.[protCount+1..]
+        |> Seq.map float
+        |> multiSet
+    proteins
+    |> Seq.map (fun (p,s) -> (p,minkDiff spectrum s))
+    |> Seq.map (fun (p,d) -> (p,(d|>Map.toSeq|>Seq.maxBy (fun (k,v)->v) )|> fun (f,i)->i))
+    |> Seq.maxBy (fun (p,d) -> d)
+    |> fun (p,d)-> printfn "%d\n%s" d p
+   
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
