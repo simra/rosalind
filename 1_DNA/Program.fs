@@ -2389,6 +2389,69 @@ getData "sgra"
 |> sgra
 |> printfn "%s"
 
+// http://www.cslu.ogi.edu/~roark/courses/cse555-BLS/lecs/lec6.pdf
+// http://www.geeksforgeeks.org/ukkonens-suffix-tree-construction-part-1/
+// The O(n^2) naive approach was sufficient for this problem.  
+// A lot of edges had long strings, limiting the complexity of the tree.
+type SuffixTree =    
+    | Internal of Map<string,SuffixTree>
+    | Leaf
+
+let naiveMakeSuffixTree (s:string) =
+    let matchStr x y =       
+        // ugh slow
+        Seq.zip x y
+        |> Seq.takeWhile (fun (a,b)-> a=b)
+        |> Seq.map (fun (a,_)-> string a)
+        |> String.concat ""
+        //|> fun sOut -> 
+            //eprintfn "x:%s y:%s s:%s" x y sOut
+        //    sOut
+    let rec addToTree (t:SuffixTree) (sfx:string) : SuffixTree=
+        match t with 
+        | Leaf -> Map.empty|>Map.add sfx Leaf|>Internal
+        | Internal(m) -> 
+            m
+            |> Map.toSeq
+            |> Seq.map (fun (k,v) -> (k,matchStr k sfx))
+            |> Seq.filter (fun (k,strmatch)-> strmatch.Length>0)
+            |> fun s ->
+                if Seq.isEmpty s then                
+                    Map.add sfx Leaf m|>Internal
+                else                
+                    let (k,strMatch)=Seq.take 1 s|>Seq.exactlyOne
+                    if strMatch.Length<k.Length then                        
+                        let u=m
+                        let v=m.[k]
+                        let u'=Map.remove k m
+                        let w=
+                            Map.empty
+                            |> Map.add (k.Substring(strMatch.Length)) v
+                            |> Map.add (sfx.Substring(strMatch.Length)) Leaf
+                            |> Internal
+                        Map.add strMatch w u' |>Internal                       
+                    else
+                        Map.add k (addToTree m.[k] (sfx.Substring(strMatch.Length))) m|>Internal
+    [0..s.Length-1]
+    |> Seq.fold (fun tout i -> addToTree tout (s.Substring(i))) (Internal(Map.empty))
+
+let rec enumerateSuffixEdges t =
+    match t with
+    | Leaf -> Seq.empty
+    | Internal (m) ->
+        seq {
+            for (k,v) in (Map.toSeq m) do
+                yield! enumerateSuffixEdges v
+                yield k
+        }
+let printSuffixEdges t =
+    enumerateSuffixEdges t
+    |> Seq.iter (printfn "%s")
+
+getData "suff"
+|> splitNewline|> Seq.take 1|>Seq.exactlyOne
+|> naiveMakeSuffixTree
+|> printSuffixEdges
 
 [<EntryPoint>]
 let main argv = 
