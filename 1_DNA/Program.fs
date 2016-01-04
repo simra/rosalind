@@ -2453,6 +2453,8 @@ getData "suff"
 |> naiveMakeSuffixTree
 |> printSuffixEdges
 
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
