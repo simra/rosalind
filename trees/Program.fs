@@ -11,6 +11,15 @@ let getData s =
     File.ReadAllText(data_root@@(sprintf "rosalind_%s_1_dataset.txt" s)) |> fun x -> x.Trim()
 let splitNewline (x:string) = x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
 
+let rec C n k =
+    if k=0L || k=n then 1L
+    else if k>=(n/2L+1L) then C n (n-k)
+    else 
+        [1L..k]
+        |> Seq.map (fun i -> (float (n-k+i))/(float i))
+        |> Seq.reduce (*)
+        |> int64
+
 
 type NwckTree =
     | Leaf of string
@@ -18,6 +27,17 @@ type NwckTree =
     | Internal of (string*NwckTree list)
 
 let ex = fun s -> new Exception(s)
+
+let rec printTree t =
+    match t with
+    | Anon -> ""
+    | Leaf(s) -> s
+    | Internal(s,leaves) ->
+        leaves
+        |> Seq.map printTree
+        |> String.concat ","
+        |> fun l -> sprintf "(%s)%s" l s
+
 
 let rec parseTree (str:string) =
     if str="" then raise (ex "Empty string")
@@ -369,6 +389,108 @@ getData "nkew"
 |> String.concat " "
 |> printfn "%s"    
 
+
+// cntq
+// could this just be C(n,4)?
+// Trick question!
+getData "cntq"
+|> splitNewline
+|> Array.ofSeq
+|> fun a -> 
+    let n = int64 a.[0]
+    n*(n-1L)*(n-2L)*(n-3L)/(24L)
+|> fun x -> x%1000000L
+|> printfn "%d"
+
+// eubt
+
+(*
+let splitEdge vertexCount edges (v1,v2) l =    
+    let lbl=sprintf "anon_%d" (vertexCount+1)
+    seq {
+        for (va,vb) in edges do
+            if (v1=va) && (v2=vb) then
+                yield (va,lbl)
+                yield (lbl,l)
+                yield (vb,lbl)
+            else
+                yield (va,vb)
+    }
+    |> edgesToNwck *)
+
+let rec enumerateAddToTree t (leaf:string) =
+    seq {
+        match t with 
+        | Internal(s,l) ->
+            let a = l|>Array.ofList
+            // can we make this more succinct?            
+            if a.Length=2 then
+                yield Some(Internal(s,[Internal("",[a.[0];Leaf(leaf)]);a.[1]]))
+                yield Some(Internal(s,[a.[0];Internal("",[a.[1];Leaf(leaf)])]))
+                yield! 
+                    enumerateAddToTree a.[0] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[t';a.[1]])))
+                yield!
+                    enumerateAddToTree a.[1] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[a.[0];t'])))
+            else
+                yield Some(Internal(s,[Internal("",[a.[0];Leaf(leaf)]);a.[1];a.[2]]))
+                yield Some(Internal(s,[a.[0];Internal("",[a.[1];Leaf(leaf)]);a.[2]]))
+                yield Some(Internal(s,[a.[0];a.[1];Internal("",[a.[2];Leaf(leaf)])]))
+                yield! 
+                    enumerateAddToTree a.[0] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[t';a.[1];a.[2]])))
+                yield!
+                    enumerateAddToTree a.[1] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[a.[0];t';a.[2]])))
+                yield!
+                    enumerateAddToTree a.[2] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[a.[0];a.[1];t'])))
+        | Leaf(l) -> yield None
+        | Anon -> yield None
+       }
+       (*
+let enumerateAddToTree t l =
+    let edges = 
+        t 
+        |> toEdges 
+        |> Seq.filter (fun (va,vb)->va<vb) // we only need one direction.
+        |> List.ofSeq
+    let vertexCount = 
+        seq {
+            for (v1,v2) in edges do
+                yield v1
+                yield v2
+        }
+        |> Seq.countBy id
+        |> Seq.length
+
+    seq {
+        for e in edges do
+            yield splitEdge vertexCount edges e l
+    }
+    *)
+let rec enumerateTrees (leaves:string[]) =
+    if leaves.Length=3 then
+        seq { yield Internal("",[Leaf(leaves.[0]);Leaf(leaves.[1]);Leaf(leaves.[2])]) }
+    else 
+        seq {
+            for t in (enumerateTrees leaves.[1..]) do
+                    yield! enumerateAddToTree t leaves.[0]
+        }
+        |> Seq.choose id
+
+getData "eubt"
+|> fun x -> x.Split(' ')
+|> enumerateTrees
+|> Seq.map printTree
+|> Seq.iter (printfn "%s;")
+
 //ghbp
 // requires validation
 // seems that we can't guarantee consistency.
@@ -626,15 +748,6 @@ let unrootTree (t:NwckTree) =
 
 
 
-let rec printTree t =
-    match t with
-    | Anon -> ""
-    | Leaf(s) -> s
-    | Internal(s,leaves) ->
-        leaves
-        |> Seq.map printTree
-        |> String.concat ","
-        |> fun l -> sprintf "(%s)%s" l s
 
 let rec addSpecies ctbl (v,e) s =
     let mkNew vertices =
