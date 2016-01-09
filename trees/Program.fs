@@ -403,21 +403,8 @@ getData "cntq"
 |> printfn "%d"
 
 // eubt
-
-(*
-let splitEdge vertexCount edges (v1,v2) l =    
-    let lbl=sprintf "anon_%d" (vertexCount+1)
-    seq {
-        for (va,vb) in edges do
-            if (v1=va) && (v2=vb) then
-                yield (va,lbl)
-                yield (lbl,l)
-                yield (vb,lbl)
-            else
-                yield (va,vb)
-    }
-    |> edgesToNwck *)
-
+// enumerate all the ways to split edges and insert the leaf.
+// messy but effective.
 let rec enumerateAddToTree t (leaf:string) =
     seq {
         match t with 
@@ -454,27 +441,7 @@ let rec enumerateAddToTree t (leaf:string) =
         | Leaf(l) -> yield None
         | Anon -> yield None
        }
-       (*
-let enumerateAddToTree t l =
-    let edges = 
-        t 
-        |> toEdges 
-        |> Seq.filter (fun (va,vb)->va<vb) // we only need one direction.
-        |> List.ofSeq
-    let vertexCount = 
-        seq {
-            for (v1,v2) in edges do
-                yield v1
-                yield v2
-        }
-        |> Seq.countBy id
-        |> Seq.length
-
-    seq {
-        for e in edges do
-            yield splitEdge vertexCount edges e l
-    }
-    *)
+       
 let rec enumerateTrees (leaves:string[]) =
     if leaves.Length=3 then
         seq { yield Internal("",[Leaf(leaves.[0]);Leaf(leaves.[1]);Leaf(leaves.[2])]) }
