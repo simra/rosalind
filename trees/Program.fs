@@ -11,6 +11,15 @@ let getData s =
     File.ReadAllText(data_root@@(sprintf "rosalind_%s_1_dataset.txt" s)) |> fun x -> x.Trim()
 let splitNewline (x:string) = x.Split([|'\r';'\n'|],StringSplitOptions.RemoveEmptyEntries)
 
+let rec C n k =
+    if k=0L || k=n then 1L
+    else if k>=(n/2L+1L) then C n (n-k)
+    else 
+        [1L..k]
+        |> Seq.map (fun i -> (float (n-k+i))/(float i))
+        |> Seq.reduce (*)
+        |> int64
+
 
 type NwckTree =
     | Leaf of string
@@ -18,6 +27,17 @@ type NwckTree =
     | Internal of (string*NwckTree list)
 
 let ex = fun s -> new Exception(s)
+
+let rec printTree t =
+    match t with
+    | Anon -> ""
+    | Leaf(s) -> s
+    | Internal(s,leaves) ->
+        leaves
+        |> Seq.map printTree
+        |> String.concat ","
+        |> fun l -> sprintf "(%s)%s" l s
+
 
 let rec parseTree (str:string) =
     if str="" then raise (ex "Empty string")
@@ -369,6 +389,365 @@ getData "nkew"
 |> String.concat " "
 |> printfn "%s"    
 
+
+// cntq
+// could this just be C(n,4)?
+// Trick question!
+getData "cntq"
+|> splitNewline
+|> Array.ofSeq
+|> fun a -> 
+    let n = int64 a.[0]
+    n*(n-1L)*(n-2L)*(n-3L)/(24L)
+|> fun x -> x%1000000L
+|> printfn "%d"
+
+// eubt
+// enumerate all the ways to split edges and insert the leaf.
+// messy but effective.
+let rec enumerateAddToTree t (leaf:string) =
+    seq {
+        match t with 
+        | Internal(s,l) ->
+            let a = l|>Array.ofList
+            // can we make this more succinct?            
+            if a.Length=2 then
+                yield Some(Internal(s,[Internal("",[a.[0];Leaf(leaf)]);a.[1]]))
+                yield Some(Internal(s,[a.[0];Internal("",[a.[1];Leaf(leaf)])]))
+                yield! 
+                    enumerateAddToTree a.[0] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[t';a.[1]])))
+                yield!
+                    enumerateAddToTree a.[1] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[a.[0];t'])))
+            else
+                yield Some(Internal(s,[Internal("",[a.[0];Leaf(leaf)]);a.[1];a.[2]]))
+                yield Some(Internal(s,[a.[0];Internal("",[a.[1];Leaf(leaf)]);a.[2]]))
+                yield Some(Internal(s,[a.[0];a.[1];Internal("",[a.[2];Leaf(leaf)])]))
+                yield! 
+                    enumerateAddToTree a.[0] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[t';a.[1];a.[2]])))
+                yield!
+                    enumerateAddToTree a.[1] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[a.[0];t';a.[2]])))
+                yield!
+                    enumerateAddToTree a.[2] leaf
+                    |> Seq.choose id
+                    |> Seq.map (fun t' -> Some(Internal(s,[a.[0];a.[1];t'])))
+        | Leaf(l) -> yield None
+        | Anon -> yield None
+       }
+       
+let rec enumerateTrees (leaves:string[]) =
+    if leaves.Length=3 then
+        seq { yield Internal("",[Leaf(leaves.[0]);Leaf(leaves.[1]);Leaf(leaves.[2])]) }
+    else 
+        seq {
+            for t in (enumerateTrees leaves.[1..]) do
+                    yield! enumerateAddToTree t leaves.[0]
+        }
+        |> Seq.choose id
+
+getData "eubt"
+|> fun x -> x.Split(' ')
+|> enumerateTrees
+|> Seq.map printTree
+|> Seq.iter (printfn "%s;")
+
+//ghbp
+// requires validation
+// seems that we can't guarantee consistency.
+// so maybe we need some ordering on splits in order to build the correct tree.
+// we could enumerate all possible combinations and choose the first that validates- too expensive for >9 rows.
+// http://evolution.berkeley.edu/evolibrary/article/0_0_0/phylogenetics_07
+type Species = { Name:string; Characters:Map<int,int> }
+let isSuperset s1 s2 = // is s2 a subset of s1?
+    Seq.zip s1 s2
+    |> Seq.fold (fun b (c1,c2)-> b&&(c1>=c2)) true
+let sortByPrecedence (ctbl:string list) =
+    let isEqual s1 s2 =
+        Seq.zip s1 s2
+        |> Seq.fold (fun b (c1,c2) -> b&&(c1=c2)) true
+    
+    
+
+    let complement s =
+        s|>Seq.map (fun c -> 1-c)
+
+    let ctbl' = 
+        ctbl
+        |> List.map (fun s -> s|>Seq.map (fun c -> string c |> int))
+
+    let s0=List.head ctbl'
+    ctbl'
+    |> List.map 
+        (fun si -> 
+            if isSuperset s0 si || isSuperset si s0 then si 
+            else 
+                let t=complement si
+                if (not (isSuperset s0 t) && (not (isSuperset t s0))) then
+                    raise (new Exception "Failed to complement")
+                t)
+    |> Array.ofList 
+    |> fun a ->
+        for i in [a.Length-1..-1..0] do
+            for j in [0..i-1] do
+                if isSuperset a.[j] a.[i] then
+                    let tmp = a.[i]
+                    a.[i]<-a.[j]
+                    a.[j]<-tmp
+        a
+
+(*
+let reOrder s1 s2 =
+    if isSuperset s1 s2 then
+        ('A',s1,s2)
+    else if isSuperset s2 s1 then
+        ('B',s2,s1)
+    else if isSuperset s1 (complement s2) then
+        ('C',s1,complement s2)
+    else if (isSuperset (complement s2) s1) then
+        ('D',complement s2,s1)
+    else ('E',s1,s2)
+
+
+    let compareCharacters (s1:int seq) (s2:int seq)=
+        Seq.zip s1 s2
+        |> Seq.map (fun (c1,c2) -> (if c1=1 then (c1-c2) else 0), (if c2=1 then c2-c1 else 0))
+        |> Seq.reduce (fun (a,b) (c,d) -> (a+c,b+d))
+        *)
+
+// 
+let isSuperset s1 s2 = // is s2 a subset of s1?
+    Seq.zip s1 s2
+    |> Seq.fold (fun b (c1,c2)-> b&&(c1>=c2)) true
+
+let complement s =
+    s|>Seq.map (fun c -> 1-c)
+let complementStr s =
+    s|>Seq.map (fun c -> if c='1' then "0" else "1")|> String.concat ""
+
+let toInts s = s|>Seq.map (fun c -> string c |> int)
+
+let makePhylogeny tree splits =
+    match splits with
+    [] -> tree
+    head::tail ->
+        match tree with
+        | Anon -> Leaf(head)
+        | Leaf(l2) ->
+            let s1=toInts head
+            let s2=toInts l2
+            if isSuperset s1 s2 then
+                Internal(head,[Leaf(l2);Leaf(l2)])
+            else if isSuperset s2 s1 then
+                Internal(l2,[Leaf(head);Leaf(head)])
+            else if isSuperset s1 (complement s2) then
+                Internal(head,[Leaf(complementStr l2);Leaf(complementStr l2)])
+            else // must be superset s2c over s1
+                Internal(complement l2,[Leaf(head);Leaf(head)])
+        | Internal(s,tlist) ->
+            
+getData "ghbp" 
+|> splitNewline
+|> fun arr ->
+    let taxa=arr.[0].Split(' ')
+    arr.[1..]
+    |> List.ofArray
+    |> List.fold makePhylogeny Anon
+    |> sortByPrecedence //Array.map (fun s -> s|>Seq.map (fun c -> string c |> int)) 
+    |> Array.ofSeq
+    |> fun a -> eprintfn "%A" (isSuperset a.[0] a.[1]); a
+    |> Seq.map (fun s -> s|>Seq.map string|>String.concat "")
+    |> Seq.iter (printfn "%s")
+    
+    
+    |> fun a -> 
+        seq {
+            for i in [0..a.Length-1] do
+                for j in [0..a.Length-1] do
+                //printfn "%d %d %A %A %A" i j a.[i] a.[j] (compareCharacters a.[i] a.[j])
+                reOrder a.[i] a.[j]
+         }
+         |>Seq.filter (fun (s,_,_) -> s='E') //printfn "%c" s//i j (isSubset a.[i] a.[j])
+         |> printfn "%A"
+
+let prepCtbl (taxa:string[]) (ctbl:string list) =
+    ctbl
+    |> Seq.mapi (fun i s -> s|>Seq.mapi (fun j c -> taxa.[j],(i,string c|>int)))
+    |> Seq.concat
+    |> Seq.groupBy (fun (t,(k,v))->t)
+    |> Seq.map (fun (t,s)-> t,s|>Seq.map (fun (t,(k,v))->(k,v))|>Map.ofSeq)
+    |> Seq.map (fun (t,m)-> {Name=t; Characters=m})
+    |> List.ofSeq
+
+let species=
+    getData "ghbp" 
+    |> splitNewline
+    |> fun arr ->
+        let taxa=arr.[0].Split(' ')
+        arr.[1..]
+        |> List.ofSeq
+        |> prepCtbl taxa
+
+
+let splitTaxa species =
+    let splits =
+        species
+        |> Seq.map (fun s -> s.Characters)
+        |> Seq.map (fun m -> m|>Map.toSeq)
+        |> Seq.concat
+        |> Seq.groupBy (fun (k,v)->k)
+        |> Seq.map (fun (k,s)-> (k,s|>Seq.countBy (fun (k,v)->v)|>Map.ofSeq))
+        |> Seq.filter (fun (k,m)-> (Map.containsKey 0 m && Map.containsKey 1 m))
+
+    let splitKey =
+        if (Seq.isEmpty splits) then
+            -1
+        else 
+            splits
+            |> Seq.maxBy (fun (k,m)-> if (Map.containsKey 1 m) then m.[1] else 0)
+            |> fun (k,m)->k
+    
+    let dropCharacter k s =
+        s
+        |> Seq.map (fun sp ->  {sp with Characters=Map.remove k sp.Characters})
+        
+    if splitKey>=0 then 
+        species
+        |> Seq.groupBy (fun s -> 
+                s.Characters.[splitKey])
+        |> Seq.map (fun (c,s)-> s)
+        |> Seq.map (dropCharacter splitKey)
+    else 
+        seq { yield species }
+
+let printSpecies species =
+    species
+    |> Seq.map (fun s -> s.Name)
+    |> String.concat ";"
+            
+
+let rec buildPhylo species =
+    let result = 
+        splitTaxa species
+        |> Array.ofSeq
+        
+    if result.Length=1 then
+        eprintfn "%s" (species |> printSpecies)
+        result.[0]
+        |> Seq.map (fun s -> s.Name)
+        |> String.concat ";"
+        |> Leaf
+    else
+        Internal("",[buildPhylo result.[0];buildPhylo result.[1]])
+        
+(*
+let rec splitTree (taxa:string[]) (nwck:NwckTree) (splitLine:string) =
+    let split =
+        splitLine
+        |> Seq.mapi (fun i c -> taxa.[i],c) 
+        |> Seq.groupBy (fun (t,c)->c)
+        |> Map.ofSeq
+    let splitLookup =
+        splitLine
+        |> Seq.mapi (fun i c -> taxa.[i],c)
+        |> Map.ofSeq
+        
+    match nwck with
+    | Anon ->
+        let s1=
+            split.['0']
+            |> Seq.map (fun (t,c)->t)
+            |> String.concat ";"
+        let s2=
+            split.['1']
+            |> Seq.map (fun (t,c)->t)
+            |> String.concat ";"
+        Internal("",[Leaf(s1);Leaf(s2)])
+    | Leaf(s) ->
+        let result =
+            s.Split(';')
+            |> Seq.groupBy (fun s -> splitLookup.[s])
+            |> Seq.map (fun (c,s) -> s)
+            |> Seq.map (String.concat ";")
+            |> Array.ofSeq
+        if result.Length>1 then
+            Internal("",[Leaf(result.[0]);Leaf(result.[1])])
+        else
+            Leaf(result.[0])
+    | Internal(s,children) ->        
+        Internal(s,children|>Seq.map (fun c -> splitTree taxa c splitLine)|>List.ofSeq)
+ *)
+let rec finalizeTree (t:NwckTree) =
+    match t with
+    | Anon -> Anon
+    | Leaf(s) -> 
+        s.Split(';')
+        |> fun a -> 
+            if (a.Length=1) then Leaf(s)
+            else Internal("",[Leaf(a.[0]);finalizeTree (Leaf(String.concat ";" a.[1..]))]) 
+    | Internal(s,leaves) ->
+        Internal(s,leaves|>List.map finalizeTree)    
+
+let unrootTree (t:NwckTree) =
+    // the topmost tree is an internal with no parent- degree two.
+    // take one of the two branches and merge it with the other.
+    match t with
+    | Internal(s,leaves) ->
+        leaves
+        |> Array.ofList
+        |> fun a ->
+           // if (a.Length!=2) then eprintfn "FAIL"
+            let t0 = a.[0]
+            match a.[1] with
+            | Internal (s',l2) -> Internal(s',t0::l2)
+            | _ -> 
+                eprintfn "FAILED TO unroot"
+                t
+    | _ -> 
+        eprintfn "FAILED TO unroot2"
+        t
+
+
+
+
+let rec addSpecies ctbl (v,e) s =
+    let mkNew vertices =
+        let vCount = Seq.length vertices
+        sprintf "V%d" vCount :: vertices
+
+    match e with
+    | [] -> "Empty tree."
+    | (v1,v2) :: tail ->
+        let (vnew,v')=mkNew v
+        let t2 =
+            (s,vnew) :: (v1, vnew) :: (v2,vnew) :: tail  
+        if isValid t2 then
+            t2
+        else
+            let t2 = head :: (addSpecies ctbl (v,tail) s)
+            if isValid t2 then 
+                t2
+            else
+                raise (new Exception("Can't find valid addition"))
+
+getData "ghbp" 
+|> splitNewline
+|> fun arr ->
+    let taxa=arr.[0].Split(' ')
+    arr.[1..]
+    |> List.ofSeq
+    |> prepCtbl taxa
+    |> buildPhylo     
+|> finalizeTree
+|> unrootTree
+|> printTree
+|> printfn "%s;"
 
 [<EntryPoint>]
 let main argv = 

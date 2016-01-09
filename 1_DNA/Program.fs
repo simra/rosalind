@@ -2288,6 +2288,173 @@ getData "pcov"
 |> fun (s::tail) -> printfn "%s" s   
 
 
+// prsm
+let computeSpectrum (s:string) =
+    let computeWt (s':string) =
+        s'
+        |> Seq.map string
+        |> Seq.map (fun x -> monomasstbl.[x])
+        |> Seq.sum
+
+    [0..s.Length]
+    |> Seq.map (fun i -> [s.Substring(0,i);s.Substring(i,s.Length-i)])
+    |> Seq.concat
+    |> Seq.map computeWt
+    |> multiSet
+
+getData "prsm"
+|> splitNewline
+|> fun arr ->
+    let protCount = int arr.[0]
+    let proteins = 
+        arr.[1..protCount]
+        |> Seq.map (fun p -> (p,computeSpectrum p))
+    let spectrum =
+        arr.[protCount+1..]
+        |> Seq.map float
+        |> multiSet
+    proteins
+    |> Seq.map (fun (p,s) -> (p,minkDiff spectrum s))
+    |> Seq.map (fun (p,d) -> (p,(d|>Map.toSeq|>Seq.maxBy (fun (k,v)->v) )|> fun (f,i)->i))
+    |> Seq.maxBy (fun (p,d) -> d)
+    |> fun (p,d)-> printfn "%d\n%s" d p
+
+// qrt
+let enumeratePairs (s:string seq) =
+    s
+    |> Array.ofSeq
+    |> fun a -> seq {
+        for i in [0..a.Length-1] do
+            for j in [i+1..a.Length-1] do
+                yield (sprintf "{%s, %s}" a.[i] a.[j])
+        }
+    
+let enumerateQuartets (taxa:string[]) ctbl =
+    ctbl
+    |> Seq.mapi (fun i c -> taxa.[i],c) 
+    |> Seq.groupBy (fun (t,c)->c)
+    |> Seq.filter (fun (i,c)->i<>'x')
+    |> Seq.map (fun (i,s) -> s|> Seq.map (fun (t,c)->t))
+    |> Seq.map enumeratePairs
+    |> Array.ofSeq
+    |> fun a -> cross (fun s1 s2 -> sprintf "%s %s" s1 s2) a.[0] a.[1]
+    
+
+
+getData "qrt" 
+|> splitNewline
+|> fun arr ->
+    let taxa=arr.[0].Split(' ')
+    arr.[1..]
+    |> Seq.map (enumerateQuartets taxa)
+    |> Seq.concat
+    |> Seq.countBy id // we can get away with this because we have strict ordering in the taxa mapping
+    |> Seq.map (fun (s,i)->s)
+    |> Seq.iter (printfn "%s")
+
+// SGRA  
+let sgra (s:float seq) =
+    // borrowed from "full"
+    let tbl =
+        s
+        |> Array.ofSeq
+        |> Array.sort
+        |> fun a -> seq {
+                for i in [0..a.Length-1] do
+                    for j in [i+1..a.Length-1] do
+                        let (w,c)=lookupWt (a.[j]-a.[i])  
+                        if (w<0.0001) then // we could also filter complements here and make it a tiny bit faster.
+                            yield (i,j,c)
+                }
+        |> Seq.groupBy (fun (i,j,c)->i)
+    let m = tbl|>Map.ofSeq
+    let rec walkGraph =
+        memoize (fun i ->
+        if not (Map.containsKey i m) then seq{yield ""}
+        else
+            seq {
+                for (_,j,c) in m.[i] do
+                    for c2 in walkGraph j do
+                        yield c+c2
+            })
+    
+    tbl
+    |> Seq.map (fun (i,_)-> walkGraph i)
+    |> Seq.concat
+    |> Seq.maxBy (fun s -> s.Length)
+
+getData "sgra"
+|> splitNewline
+|> Seq.map float
+|> sgra
+|> printfn "%s"
+
+// http://www.cslu.ogi.edu/~roark/courses/cse555-BLS/lecs/lec6.pdf
+// http://www.geeksforgeeks.org/ukkonens-suffix-tree-construction-part-1/
+// The O(n^2) naive approach was sufficient for this problem.  
+// A lot of edges had long strings, limiting the complexity of the tree.
+type SuffixTree =    
+    | Internal of Map<string,SuffixTree>
+    | Leaf
+
+let naiveMakeSuffixTree (s:string) =
+    let matchStr x y =       
+        // ugh slow
+        Seq.zip x y
+        |> Seq.takeWhile (fun (a,b)-> a=b)
+        |> Seq.map (fun (a,_)-> string a)
+        |> String.concat ""
+        //|> fun sOut -> 
+            //eprintfn "x:%s y:%s s:%s" x y sOut
+        //    sOut
+    let rec addToTree (t:SuffixTree) (sfx:string) : SuffixTree=
+        match t with 
+        | Leaf -> Map.empty|>Map.add sfx Leaf|>Internal
+        | Internal(m) -> 
+            m
+            |> Map.toSeq
+            |> Seq.map (fun (k,v) -> (k,matchStr k sfx))
+            |> Seq.filter (fun (k,strmatch)-> strmatch.Length>0)
+            |> fun s ->
+                if Seq.isEmpty s then                
+                    Map.add sfx Leaf m|>Internal
+                else                
+                    let (k,strMatch)=Seq.take 1 s|>Seq.exactlyOne
+                    if strMatch.Length<k.Length then                        
+                        let u=m
+                        let v=m.[k]
+                        let u'=Map.remove k m
+                        let w=
+                            Map.empty
+                            |> Map.add (k.Substring(strMatch.Length)) v
+                            |> Map.add (sfx.Substring(strMatch.Length)) Leaf
+                            |> Internal
+                        Map.add strMatch w u' |>Internal                       
+                    else
+                        Map.add k (addToTree m.[k] (sfx.Substring(strMatch.Length))) m|>Internal
+    [0..s.Length-1]
+    |> Seq.fold (fun tout i -> addToTree tout (s.Substring(i))) (Internal(Map.empty))
+
+let rec enumerateSuffixEdges t =
+    match t with
+    | Leaf -> Seq.empty
+    | Internal (m) ->
+        seq {
+            for (k,v) in (Map.toSeq m) do
+                yield! enumerateSuffixEdges v
+                yield k
+        }
+let printSuffixEdges t =
+    enumerateSuffixEdges t
+    |> Seq.iter (printfn "%s")
+
+getData "suff"
+|> splitNewline|> Seq.take 1|>Seq.exactlyOne
+|> naiveMakeSuffixTree
+|> printSuffixEdges
+
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
