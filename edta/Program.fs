@@ -220,6 +220,32 @@ let glob (S:Map<char*char,int>) (s:string) (t:string) =
             |> Seq.maxBy (fun (a,b,c)->a))
     helper(s.Length,t.Length)
 
+// see https://en.wikipedia.org/wiki/Needleman%E2%80%93Wunsch_algorithm
+// arriving at the wrong answer, not sure why.
+let globConstgap (S:Map<char*char,int>) (s:string) (t:string) = 
+    let g = -5
+    let rpt x = [for i in 1..x do yield "-"]|>String.concat ""   
+    let penalizeEnd (s:string) = if s.[s.Length-1]='-' then 0 else g
+    let rec helper = memoize (fun (i:int,j:int) ->
+        //eprintfn "%d %d" i j
+        if i = 0 then
+            if j = 0 then (0,"","")
+            else (g,rpt j,t.Substring(0,j))
+        else if j = 0 then
+            (g,s.Substring(0,i),rpt i)
+        else    
+            seq {
+                let (a1,b1,c1)= helper(i-1,j)
+                yield ((penalizeEnd c1)+a1,b1+string s.[i-1],c1+"-")
+                let (a2,b2,c2)= helper(i,j-1)
+                yield ((penalizeEnd b2)+a2,b2+"-",c2+string t.[j-1])
+                let (a3,b3,c3)= helper(i-1,j-1)
+                let di=S.[(s.[i-1],t.[j-1])]
+                yield (di+a3,b3+string s.[i-1],c3+string t.[j-1])
+            } 
+            |> Seq.maxBy (fun (a,b,c)->a))
+    helper(s.Length,t.Length)
+
 let doEdta()=
     getData "edta"
     |> parseFasta
@@ -250,9 +276,15 @@ let doGlob() =
     |> fun a -> glob BLOSUM62 a.[0].String a.[1].String
     |> fun (cost,_,_) -> printfn "%d" cost
 
+let doGCon() = 
+    getData "gcon"
+    |> parseFasta
+    |> Array.ofSeq
+    |> fun a -> globConstgap BLOSUM62 a.[0].String a.[1].String
+    |> fun (cost,_,_) -> printfn "%d" cost
 
 [<EntryPoint>]
 let main argv = 
-    doGlob()
+    doGCon()
 
     0 // return an integer exit code
