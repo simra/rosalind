@@ -148,7 +148,7 @@ let complement c =
     | 'G' -> 'C'
     | _ -> raise (new Exception("Invalid nucleotide"))
 
-let reverseComplement x =
+let reverseComplement (x:string) =
     x
     |> Seq.map complement 
     |> List.ofSeq
@@ -2454,6 +2454,76 @@ getData "suff"
 |> printSuffixEdges
 
 
+// GASM
+// Feels sloppy. A lot of redundant work here.
+let mink=20 // we want to choose a reasonably large k to limit the search space.
+
+let addRead (m,l) (s:string) =
+    let subAddRead (s1:string) (s2:string) (m2:Map<string,string list>) =
+        if Map.containsKey s1 m2 then
+            Map.add s1 (s2::m2.[s1]) m2
+        else
+            Map.add s1 [s2] m2
+    
+    
+
+    let s' = reverseComplement s
+    [mink..s.Length-1]
+    |> Seq.fold (fun m' k ->
+        [0..s.Length-k-1]
+        |> Seq.fold (fun m'' offset ->
+            m''
+            |> subAddRead (s.Substring(offset,k)) (s.Substring(offset+1,k))    
+            |> subAddRead (s'.Substring(offset,k)) (s'.Substring(offset+1,k))) m') m
+    |> fun mOut -> (mOut,s::l)
+
+let cyclicContains (str:string) (s:string) =
+    [0..str.Length-1]
+    |> Seq.map (fun i -> 
+        [0..s.Length-1]
+        |> Seq.map (fun j -> s.[j]=str.[(i+j)%str.Length])
+        |> Seq.reduce (&&))
+    |> Seq.reduce (||)
+    
+
+let visitsAllVertices reads (str:string) =
+    reads
+    |> Seq.fold (fun b r -> b &&  (cyclicContains str r||cyclicContains str (reverseComplement r))) true
+
+let rec findGasmSuperstring maxk (reads:string list) m (heap,set0) =
+    let min=BinomialHeapPQ.getMin heap
+    match min with
+    | Some(str) ->
+        eprintfn "%d" str.k
+        if visitsAllVertices reads str.v then str.v
+        else
+            [mink..maxk] // i need to puzzle out why we have to look at all possible k here.
+            |> Seq.filter (fun k -> str.v.Length-k>0)
+            |> Seq.map (fun k -> str.v.Substring(str.v.Length-k))            
+            |> Seq.fold (fun (h,set1) sk ->
+                //eprintfn "sk: %s %b" sk (Map.containsKey sk m)
+                if Map.containsKey sk m then
+                    m.[sk]
+                    |> List.fold (fun (h',set2) (s:string) -> 
+                        let s' = str.v + (string s.[s.Length-1])
+                       // eprintfn "%s" s'
+                        if not (Set.contains s' set2) then   
+                            (BinomialHeapPQ.insert (uint32 s'.Length) s' h',Set.add s' set2)
+                        else (h,set1)
+                        ) (h,set1)                        
+                else h,set1) ((BinomialHeapPQ.deleteMin heap),set0)
+            |> findGasmSuperstring maxk reads m
+    | None -> "Empty Heap!"   
+    
+
+getData "gasm"
+|> splitNewline
+|> Seq.fold addRead (Map.empty,[])
+|> fun (m,reads) ->
+    let (seed,maxk)=m|>Map.toSeq|>Seq.maxBy (fun (k,v)->k.Length)|>fun (k,v) -> (k,k.Length)
+    findGasmSuperstring maxk reads m (BinomialHeapPQ.insert (uint32 seed.Length) seed BinomialHeapPQ.empty,Set.add seed Set.empty)
+    |> printfn "%s"
+    
 
 [<EntryPoint>]
 let main argv = 

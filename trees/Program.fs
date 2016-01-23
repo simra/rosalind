@@ -533,48 +533,90 @@ let complementStr s =
 
 let toInts s = s|>Seq.map (fun c -> string c |> int)
 
-let makePhylogeny tree splits =
-    match splits with
-    [] -> tree
-    head::tail ->
-        match tree with
-        | Anon -> Leaf(head)
-        | Leaf(l2) ->
-            let s1=toInts head
-            let s2=toInts l2
-            if isSuperset s1 s2 then
-                Internal(head,[Leaf(l2);Leaf(l2)])
-            else if isSuperset s2 s1 then
-                Internal(l2,[Leaf(head);Leaf(head)])
-            else if isSuperset s1 (complement s2) then
-                Internal(head,[Leaf(complementStr l2);Leaf(complementStr l2)])
-            else // must be superset s2c over s1
-                Internal(complement l2,[Leaf(head);Leaf(head)])
-        | Internal(s,tlist) ->
-            
+let charToSplit taxa split =
+    Seq.zip split taxa
+    |> Seq.groupBy (fun (c,t)->c)
+    |> Seq.map (fun (c,s)-> (int c,s|>Seq.map (fun (c,t)->t)|>Set.ofSeq))
+    |> Map.ofSeq
+
+
+// TODO: fix this.
+let rec makePhylogeny tree split  =
+    match tree with
+    | Anon -> Internal(split,[Leaf("");Leaf("")])
+    | Internal(character,subtrees) ->
+        let s1=toInts split
+        let s2=toInts character
+        let ss =
+            (isSuperset s1 s2,
+             isSuperset s1 (complement s2),
+             isSuperset (complement s1) s2,
+             isSuperset (complement s1) (complement s2),
+             isSuperset s2 s1,
+             isSuperset s2 (complement s1),
+             isSuperset (complement s2) s1,
+             isSuperset (complement s2) (complement s1))
+        eprintfn "%s\n%s\n%A" split character ss // something wrong here.
+
+        if isSuperset s1 s2 || isSuperset s1 (complement s2) then
+            Internal(split,[Leaf("");Internal(character,subtrees)])
+        else if isSuperset (complement s1) s2 || isSuperset (complement s1) (complement s2) then
+            Internal(split,[Internal(character,subtrees);Leaf("")])
+        else
+            let a = subtrees|>Array.ofList
+            //eprintfn "make: %d" a.Length
+            if isSuperset s2 s1 || isSuperset s2 (complement s1) then // s2.[1] is superset of this character
+                Internal(character,[a.[0]; makePhylogeny a.[1] split;] )
+            else // must be true: isSuperset (complement s2) s1 || isSuperset (complement s2) (complement s1)
+                eprintfn "isSuperset: %b" (isSuperset (complement s2) s1 || isSuperset (complement s2) (complement s1))
+                Internal(character,[makePhylogeny a.[0] split; a.[1]] )
+    | Leaf(l) -> 
+        Internal(split,[Leaf("");Leaf("")])
+
+let rec insertTaxa tree (t,i) =
+    match tree with 
+    | Anon -> Leaf(t)
+    | Leaf(s) -> (Leaf(s+t+";"))   
+    | Internal(character,subtrees) ->
+        let c=character.[i]
+        let a = subtrees|>Array.ofList
+        //eprintfn "insert: %d" a.Length
+        if c='0' then
+            Internal(character,[insertTaxa a.[0] (t,i);a.[1]])
+        else
+            Internal(character,[a.[0];insertTaxa a.[1] (t,i)])    
+
+let rec finalizeTree (t:NwckTree) : NwckTree option =
+    match t with
+    | Anon -> Some(Anon)
+    | Leaf(s) -> 
+        if (s="") then None
+        else 
+            s.Split([|';'|],StringSplitOptions.RemoveEmptyEntries)
+            |> fun a ->             
+                if (a.Length=1) then Some(Leaf(a.[0]))
+                else Some(Internal("",[Leaf(a.[0]);seq{yield finalizeTree (Leaf(String.concat ";" a.[1..]))}|>Seq.choose id|>Seq.exactlyOne])) 
+    | Internal(s,leaves) ->
+        let result = leaves|>List.map finalizeTree|>List.choose id
+        if (List.isEmpty result) then None
+        else Some(Internal("",result))
+
+
 getData "ghbp" 
 |> splitNewline
 |> fun arr ->
-    let taxa=arr.[0].Split(' ')
+    let taxa=arr.[0].Split(' ')|> Seq.mapi (fun i t -> (t,i))
     arr.[1..]
     |> List.ofArray
     |> List.fold makePhylogeny Anon
-    |> sortByPrecedence //Array.map (fun s -> s|>Seq.map (fun c -> string c |> int)) 
-    |> Array.ofSeq
-    |> fun a -> eprintfn "%A" (isSuperset a.[0] a.[1]); a
-    |> Seq.map (fun s -> s|>Seq.map string|>String.concat "")
-    |> Seq.iter (printfn "%s")
-    
-    
-    |> fun a -> 
-        seq {
-            for i in [0..a.Length-1] do
-                for j in [0..a.Length-1] do
-                //printfn "%d %d %A %A %A" i j a.[i] a.[j] (compareCharacters a.[i] a.[j])
-                reOrder a.[i] a.[j]
-         }
-         |>Seq.filter (fun (s,_,_) -> s='E') //printfn "%c" s//i j (isSubset a.[i] a.[j])
-         |> printfn "%A"
+    |> fun t -> Seq.fold insertTaxa t taxa
+    |> finalizeTree    
+    |> fun t ->
+        match t with 
+        | None -> Anon
+        | Some(s) -> s   
+    |> printTree
+    |> printfn "%s"
 
 let prepCtbl (taxa:string[]) (ctbl:string list) =
     ctbl
