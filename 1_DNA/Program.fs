@@ -2523,7 +2523,6 @@ getData "gasm"
     let (seed,maxk)=m|>Map.toSeq|>Seq.maxBy (fun (k,v)->k.Length)|>fun (k,v) -> (k,k.Length)
     findGasmSuperstring maxk reads m (BinomialHeapPQ.insert (uint32 seed.Length) seed BinomialHeapPQ.empty,Set.add seed Set.empty)
     |> printfn "%s"
-    
 
 [<EntryPoint>]
 let main argv = 
