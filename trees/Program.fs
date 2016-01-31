@@ -458,7 +458,7 @@ getData "eubt"
 |> Seq.map printTree
 |> Seq.iter (printfn "%s;")
 
-//ghbp
+//chbp
 // requires validation
 // seems that we can't guarantee consistency.
 // so maybe we need some ordering on splits in order to build the correct tree.
@@ -468,70 +468,14 @@ type Species = { Name:string; Characters:Map<int,int> }
 let isSuperset s1 s2 = // is s2 a subset of s1?
     Seq.zip s1 s2
     |> Seq.fold (fun b (c1,c2)-> b&&(c1>=c2)) true
-let sortByPrecedence (ctbl:string list) =
-    let isEqual s1 s2 =
-        Seq.zip s1 s2
-        |> Seq.fold (fun b (c1,c2) -> b&&(c1=c2)) true
-    
-    
-
-    let complement s =
-        s|>Seq.map (fun c -> 1-c)
-
-    let ctbl' = 
-        ctbl
-        |> List.map (fun s -> s|>Seq.map (fun c -> string c |> int))
-
-    let s0=List.head ctbl'
-    ctbl'
-    |> List.map 
-        (fun si -> 
-            if isSuperset s0 si || isSuperset si s0 then si 
-            else 
-                let t=complement si
-                if (not (isSuperset s0 t) && (not (isSuperset t s0))) then
-                    raise (new Exception "Failed to complement")
-                t)
-    |> Array.ofList 
-    |> fun a ->
-        for i in [a.Length-1..-1..0] do
-            for j in [0..i-1] do
-                if isSuperset a.[j] a.[i] then
-                    let tmp = a.[i]
-                    a.[i]<-a.[j]
-                    a.[j]<-tmp
-        a
-
-(*
-let reOrder s1 s2 =
-    if isSuperset s1 s2 then
-        ('A',s1,s2)
-    else if isSuperset s2 s1 then
-        ('B',s2,s1)
-    else if isSuperset s1 (complement s2) then
-        ('C',s1,complement s2)
-    else if (isSuperset (complement s2) s1) then
-        ('D',complement s2,s1)
-    else ('E',s1,s2)
-
-
-    let compareCharacters (s1:int seq) (s2:int seq)=
-        Seq.zip s1 s2
-        |> Seq.map (fun (c1,c2) -> (if c1=1 then (c1-c2) else 0), (if c2=1 then c2-c1 else 0))
-        |> Seq.reduce (fun (a,b) (c,d) -> (a+c,b+d))
-        *)
-
-// 
-let isSuperset s1 s2 = // is s2 a subset of s1?
-    Seq.zip s1 s2
-    |> Seq.fold (fun b (c1,c2)-> b&&(c1>=c2)) true
 
 let complement s =
     s|>Seq.map (fun c -> 1-c)
+
 let complementStr s =
     s|>Seq.map (fun c -> if c='1' then "0" else "1")|> String.concat ""
 
-let toInts s = s|>Seq.map (fun c -> string c |> int)
+let toInts (s:string) = s|>Seq.map (fun c -> string c |> int)
 
 let charToSplit taxa split =
     Seq.zip split taxa
@@ -539,6 +483,101 @@ let charToSplit taxa split =
     |> Seq.map (fun (c,s)-> (int c,s|>Seq.map (fun (c,t)->t)|>Set.ofSeq))
     |> Map.ofSeq
 
+[<StructuredFormatDisplay("{AsString}")>]
+type phyloEdge = 
+    { split:seq<int>;
+      v1:int;
+      v2:int }
+    with 
+    override this.ToString() = sprintf "(%d,%d,%s)" this.v1 this.v2 (this.split|>Seq.map string|>String.concat "")
+    member m.AsString = m.ToString()
+
+type phyloTree = int*list<phyloEdge> // vertex count and edges
+
+let xorSplit s1 s2 =
+    Seq.zip s1 s2
+    |> Seq.map (fun (c1,c2) -> (c1+c2)%2)
+
+// feels like we're on the right track.    
+let rec addToTree (vcount,tree) split =
+    match tree with
+    | [] -> 
+        let e= { split=split; v1=0; v2=1 }
+        (2,[e])
+    | head::tail ->
+        //  is there a way to split head that's consistent with the new split?
+        if isSuperset split head.split then
+            // add a new vertex vi splitting head, and another capturing the set not represented by the right end of head.
+            let vi = vcount
+            let vj = vi+1
+            let e1 = { split=split; v1= head.v1; v2=vi}
+            let e2= { split = xorSplit split head.split; v1=vi; v2=vj }
+            let head' = {split=head.split; v1=vi; v2=head.v2 }
+            (vcount+2,e1::e2::head'::tail)
+        else if isSuperset head.split split then
+            let vi = vcount
+            let vj = vi+1
+            let e1 = { split = split; v1=vi; v2=head.v2 }
+            let e2= { split = xorSplit head.split split; v1=vi; v2=vj }
+            let head' = { split = head.split; v1=head.v1; v2=vi}
+            (vcount+2,e1::e2::head'::tail)
+        else
+            let (v',t')=addToTree (vcount,tail) split
+            (v',head::t')
+
+let toAdj tree =
+    tree
+    |> Seq.map (fun e -> [e.v1,e;e.v2,e])
+    |> List.concat
+    |> Seq.groupBy (fun (v,e)->v)
+    |> Seq.map (fun (v,s)-> (v,Seq.map (fun (v,e)->e) s|>List.ofSeq))
+    |> Map.ofSeq
+
+
+// we have the edges of the tree and the adjacency list.  The tree is expressed in terms of splits.  Now we need to map the species to leaves of the tree.
+
+let validateTree (v,t) =
+    toAdj t
+    |> Map.toSeq
+    |> Seq.map (fun (v,s)-> Seq.length s)
+    |> Seq.countBy id
+    |> eprintfn "Vertices: %d Counts: %A" v
+    t
+
+// Buggy. Fix.
+let assignTaxa taxa tree =
+    let adj=toAdj tree
+    let rec helper i parent e =
+        let lr = e.split|>Seq.toArray|> fun a -> a.[i]
+        let child = 
+            if lr=0 then e.v1 else e.v2
+        if child=parent then 
+            parent
+        else 
+            let aa=adj.[child]
+            eprintfn "%A" aa
+            if List.length aa = 1 then child
+            else 
+                // check each edge adjacent to child
+                aa 
+                |> List.map (helper i child)
+                |> List.filter (fun v -> v<>child)
+                |> fun (head::tail)->head
+    taxa
+    |> Seq.map (fun (t,i)-> (t,helper i -1 (List.head tree)))         
+
+getData "chbp"
+|> splitNewline
+|> fun arr ->
+    let taxa=arr.[0].Split(' ')|> Seq.mapi (fun i t -> (t,i))
+    arr.[1..]
+    |> Seq.map toInts
+    |> Seq.fold addToTree (0,[])
+   // |> fun t -> toAdj t, t
+   // |> 
+    |> validateTree
+    |> assignTaxa taxa
+    |> Seq.iter (printfn "%A")
 
 // TODO: fix this.
 let rec makePhylogeny tree split  =
@@ -602,7 +641,7 @@ let rec finalizeTree (t:NwckTree) : NwckTree option =
         else Some(Internal("",result))
 
 
-getData "ghbp" 
+getData "chbp" 
 |> splitNewline
 |> fun arr ->
     let taxa=arr.[0].Split(' ')|> Seq.mapi (fun i t -> (t,i))
