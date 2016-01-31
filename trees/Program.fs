@@ -458,6 +458,40 @@ getData "eubt"
 |> Seq.map printTree
 |> Seq.iter (printfn "%s;")
 
+// mend
+type MendEst = { AA :float ; Aa: float ; aa: float }
+let rec mend t =
+    match t with 
+    | Leaf(s) ->
+        match s with 
+        | "AA" -> { AA=1.; Aa=0.; aa=0. }
+        | "Aa" -> { AA=0.; Aa=1.; aa=0. }
+        | "aa" -> { AA=0.; Aa=0.; aa=1. }
+    | Anon -> {AA=0.; Aa=0.; aa=0.}
+    | Internal(s,l) ->
+        l
+        |> Array.ofList
+        |> fun a -> 
+            let m1=mend a.[0]
+            let m2=mend a.[1]
+            { 
+              AA=m1.AA*m2.AA+m1.AA*0.5*m2.Aa+0.5*m1.Aa*m2.AA+0.25*m1.Aa*m2.Aa;
+              Aa=m1.AA*0.5*m2.Aa+m1.AA*m2.aa+0.5*m1.Aa*m2.AA+0.5*m1.Aa*m2.Aa+0.5*m1.Aa*m2.aa+m1.aa*m2.AA+m1.aa*0.5*m2.Aa
+              aa=0.25*m1.Aa*m2.Aa+0.5*m1.Aa*m2.aa+m1.aa*m2.aa+m1.aa*0.5*m2.Aa   
+            }
+            |> fun a -> 
+                if abs (a.AA+a.Aa+a.aa-1.0)>1e-6 then eprintfn "Error: l:%A m1:%A m2:%A a:%A" l m1 m2 a;
+                a
+
+
+getData "mend"
+|> splitNewline
+|> Seq.take 1 |> Seq.exactlyOne
+|> parseTree
+|> mend
+|> fun a -> printfn "%f %f %f" a.AA a.Aa a.aa
+
+
 //chbp
 // requires validation
 // seems that we can't guarantee consistency.
@@ -468,9 +502,9 @@ type Species = { Name:string; Characters:Map<int,int> }
 let isSuperset s1 s2 = // is s2 a subset of s1?
     Seq.zip s1 s2
     |> Seq.fold (fun b (c1,c2)-> b&&(c1>=c2)) true
-
-let complement s =
-    s|>Seq.map (fun c -> 1-c)
+    
+    let complement s =
+        s|>Seq.map (fun c -> 1-c)
 
 let complementStr s =
     s|>Seq.map (fun c -> if c='1' then "0" else "1")|> String.concat ""
@@ -495,7 +529,7 @@ type phyloEdge =
 type phyloTree = int*list<phyloEdge> // vertex count and edges
 
 let xorSplit s1 s2 =
-    Seq.zip s1 s2
+        Seq.zip s1 s2
     |> Seq.map (fun (c1,c2) -> (c1+c2)%2)
 
 // feels like we're on the right track.    

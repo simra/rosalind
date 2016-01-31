@@ -11,6 +11,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "trees", "trees\trees.fsproj
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "edta", "edta\edta.fsproj", "{5C5829CC-C72E-4E0A-84C2-8A69BFC6EF48}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ling", "ling\ling.fsproj", "{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,14 @@ Global
 		{5C5829CC-C72E-4E0A-84C2-8A69BFC6EF48}.Release|Any CPU.Build.0 = Release|Any CPU
 		{5C5829CC-C72E-4E0A-84C2-8A69BFC6EF48}.Release|x64.ActiveCfg = Release|x64
 		{5C5829CC-C72E-4E0A-84C2-8A69BFC6EF48}.Release|x64.Build.0 = Release|x64
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Debug|Any CPU.Build.0 = Debug|x64
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Debug|x64.Build.0 = Debug|Any CPU
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Release|x64.ActiveCfg = Release|Any CPU
+		{B9CD4D30-E7D4-4692-806A-94FD3BD15F99}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

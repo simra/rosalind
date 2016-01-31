@@ -2261,7 +2261,16 @@ let cunr n =
             if n < 3L then 1L 
             else
                 FactBig (bigint (2L*n-4L))/(FactBig (bigint (n-2L)))/(powBig (2L,(n-2L)))%(bigint 1000000)|>int64
-  
+
+// root: there are 2^n-1 rooted binary trees. [INCORRECT]
+let root n =
+    let rec helper n' = 
+        if n' = 0 then 1
+        else (2*(helper (n'-1)))%1000000
+    let result=helper n
+    //eprintfn "%A" result
+    if result=0 then 1000000-1
+    else result-1
 
 // pcov is highly simplified- no reverse complements and the input has only one cycle.
 // for perf reasons we may need a suffix tree.
@@ -2523,7 +2532,6 @@ getData "gasm"
     let (seed,maxk)=m|>Map.toSeq|>Seq.maxBy (fun (k,v)->k.Length)|>fun (k,v) -> (k,k.Length)
     findGasmSuperstring maxk reads m (BinomialHeapPQ.insert (uint32 seed.Length) seed BinomialHeapPQ.empty,Set.add seed Set.empty)
     |> printfn "%s"
-    
 
 [<EntryPoint>]
 let main argv = 
