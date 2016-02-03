@@ -503,8 +503,8 @@ let isSuperset s1 s2 = // is s2 a subset of s1?
     Seq.zip s1 s2
     |> Seq.fold (fun b (c1,c2)-> b&&(c1>=c2)) true
     
-    let complement s =
-        s|>Seq.map (fun c -> 1-c)
+let complement s =
+    s|>Seq.map (fun c -> 1-c)
 
 let complementStr s =
     s|>Seq.map (fun c -> if c='1' then "0" else "1")|> String.concat ""
@@ -530,33 +530,34 @@ type phyloTree = int*list<phyloEdge> // vertex count and edges
 
 let xorSplit s1 s2 =
         Seq.zip s1 s2
-    |> Seq.map (fun (c1,c2) -> (c1+c2)%2)
+        |> Seq.map (fun (c1,c2) -> (c1+c2)%2)
 
 // feels like we're on the right track.    
-let rec addToTree (vcount,tree) split =
+let rec addToTree (vcount,tree) _split =
     match tree with
     | [] -> 
-        let e= { split=split; v1=0; v2=1 }
+        //eprintfn "%s" "Note: adding to empty tree"
+        let e= { split=_split; v1=0; v2=1 }
         (2,[e])
     | head::tail ->
         //  is there a way to split head that's consistent with the new split?
-        if isSuperset split head.split then
+        if isSuperset _split head.split then
             // add a new vertex vi splitting head, and another capturing the set not represented by the right end of head.
             let vi = vcount
             let vj = vi+1
-            let e1 = { split=split; v1= head.v1; v2=vi}
-            let e2= { split = xorSplit split head.split; v1=vi; v2=vj }
+            let e1 = { split=_split; v1= head.v1; v2=vi}
+            let e2= { split = xorSplit _split head.split; v1=vi; v2=vj }
             let head' = {split=head.split; v1=vi; v2=head.v2 }
             (vcount+2,e1::e2::head'::tail)
-        else if isSuperset head.split split then
+        else if isSuperset head.split _split then
             let vi = vcount
             let vj = vi+1
-            let e1 = { split = split; v1=vi; v2=head.v2 }
-            let e2= { split = xorSplit head.split split; v1=vi; v2=vj }
+            let e1 = { split = _split; v1=vi; v2=head.v2 }
+            let e2= { split = xorSplit head.split _split; v1=vi; v2=vj }
             let head' = { split = head.split; v1=head.v1; v2=vi}
             (vcount+2,e1::e2::head'::tail)
         else
-            let (v',t')=addToTree (vcount,tail) split
+            let (v',t')=addToTree (vcount,tail) _split
             (v',head::t')
 
 let toAdj tree =
@@ -569,13 +570,20 @@ let toAdj tree =
 
 
 // we have the edges of the tree and the adjacency list.  The tree is expressed in terms of splits.  Now we need to map the species to leaves of the tree.
+let printAdj m =
+    m
+    |> Map.toSeq
+    |> Seq.iter (fun (k,v)-> printfn "%d: %s" k (v|>Seq.map (fun e -> (if e.v1=k then e.v2 else e.v1)|>string)|>String.concat ","))
 
 let validateTree (v,t) =
     toAdj t
+    |> fun a -> printAdj a; a
     |> Map.toSeq
     |> Seq.map (fun (v,s)-> Seq.length s)
     |> Seq.countBy id
     |> eprintfn "Vertices: %d Counts: %A" v
+    //t
+    //|> fun (head::tail) -> (validateEdge tail head)
     t
 
 // Buggy. Fix.
@@ -586,10 +594,14 @@ let assignTaxa taxa tree =
         let child = 
             if lr=0 then e.v1 else e.v2
         if child=parent then 
+            eprintfn "%s" "Warning: child-parent conflict?"
+            eprintfn "%A" e
+            eprintfn "%A" adj.[child]
+            eprintfn "%A" adj.[parent]
             parent
         else 
             let aa=adj.[child]
-            eprintfn "%A" aa
+            //eprintfn "%A" aa
             if List.length aa = 1 then child
             else 
                 // check each edge adjacent to child
@@ -599,6 +611,32 @@ let assignTaxa taxa tree =
                 |> fun (head::tail)->head
     taxa
     |> Seq.map (fun (t,i)-> (t,helper i -1 (List.head tree)))         
+
+//#r @"C:\GitHub\automatic-graph-layout\GraphLayout\MSAGL\bin\Debug\Microsoft.Msagl.dll"
+//#r @"C:\GitHub\automatic-graph-layout\GraphLayout\Drawing\bin\Debug\Microsoft.Msagl.Drawing.dll"
+// #r @"System.Windows.Forms.dll"
+// #r @"System.Windows.Forms.DataVisualization.dll"
+// #r @"C:\GitHub\automatic-graph-layout\GraphLayout\tools\GraphViewerGDI\bin\Debug\Microsoft.Msagl.GraphViewerGdi.dll"
+let render tree = 
+    let form = new System.Windows.Forms.Form()
+    //create a viewer object 
+    let viewer = new Microsoft.Msagl.GraphViewerGdi.GViewer();
+    //create a graph object 
+    let graph = new Microsoft.Msagl.Drawing.PhyloTree() //new Microsoft.Msagl.Drawing.Graph("graph");
+    //create the graph content 
+    tree
+    |> Seq.iter (fun e -> graph.AddEdge((string e.v1),(string e.v2))|>ignore)
+   //bind the graph to the viewer 
+    viewer.Graph <- graph;
+    //associate the viewer with the form 
+    form.SuspendLayout();
+    viewer.Dock <- System.Windows.Forms.DockStyle.Fill;
+    form.Controls.Add(viewer);
+    form.ResumeLayout();
+    //show the form 
+    form.ShowDialog();
+
+
 
 getData "chbp"
 |> splitNewline
@@ -610,8 +648,10 @@ getData "chbp"
    // |> fun t -> toAdj t, t
    // |> 
     |> validateTree
+    |> render
+    (*
     |> assignTaxa taxa
-    |> Seq.iter (printfn "%A")
+    |> Seq.iter (printfn "%A") *)
 
 // TODO: fix this.
 let rec makePhylogeny tree split  =
