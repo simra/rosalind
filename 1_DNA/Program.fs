@@ -2407,12 +2407,16 @@ type SuffixTree =
     | Leaf
 
 let naiveMakeSuffixTree (s:string) =
-    let matchStr x y =       
-        // ugh slow
+    let matchStr (x:string) (y:string) =
+        let mutable i=0
+        while i<x.Length && i<y.Length && x.[i]=y.[i] do
+            i<-i+1
+        x.Substring(0,i)       
+        (* // ugh slow
         Seq.zip x y
         |> Seq.takeWhile (fun (a,b)-> a=b)
         |> Seq.map (fun (a,_)-> string a)
-        |> String.concat ""
+        |> String.concat "" *)
         //|> fun sOut -> 
             //eprintfn "x:%s y:%s s:%s" x y sOut
         //    sOut
