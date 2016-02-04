@@ -108,8 +108,25 @@ let doLing s =
     (sub s, m 4L (int64 s.Length))
     |> fun (s,m)-> (float s)/(float m)
     
+// remove substrings
+let filterStrings (ss:(int*string) seq) =
+    ss
+    |> Seq.sortBy (fun (_,s) -> s.Length)
+    |> Array.ofSeq 
+    |> fun a -> 
+        [0..a.Length-1] 
+        |> Seq.map (fun i ->
+                [i+1..a.Length-1]
+                |> Seq.fold (fun b j -> b||(snd a.[j]).Contains(snd a.[i])) false
+                |> fun b -> if not b then Some(a.[i]) else None)
+        |> Seq.choose id
 
-let rec mrep (s,t) =
+let rec mrep (s:string,t:SuffixTree2) =
+    let helper (kix,klen) m2 =
+        mrep (s,m2)
+        |> Seq.filter (fun (c,s')->c>1)
+        |> Seq.map (fun (c,s')-> (c,s.Substring(kix,klen)+s'))
+    
     match t with 
     | Leaf2 -> seq { yield (1,"") }
     | Internal2(m) ->
@@ -117,11 +134,30 @@ let rec mrep (s,t) =
         |> Map.toSeq
         |> Seq.map 
             (fun ((kix,klen),v) -> 
-                mrep (s,v)
-                |> Seq.filter (fun (c,str)->c>1)
-                |> Seq.map (fun (c,str)-> )
-                let s'=s.Substring(kix,klen)
+                match v with 
+                | Leaf2 -> seq { yield (1,"") }
+                | Internal2(m2)-> 
+                    let r = 
+                        helper (kix,klen) v
+                      //  |> Seq.filter (fun (c,s)->c>1) unnecessary
 
+                    if Seq.isEmpty r then // none of the children is a candidate to extend
+                        seq {yield (Seq.length m2, s.Substring(kix,klen))}
+                    else 
+                        r // we can extend the string longer
+                      //  |> Seq.map (fun (c,s')->c,s.Substring(kix,klen)+s') )
+                      )
+        |> Seq.concat
+        |> filterStrings
+
+let doMrep() =
+    getData "mrep"
+    |> splitNewline
+    |> Seq.take 1 |> Seq.exactlyOne
+    |> naiveMakeSuffixTree2
+    |> mrep
+    |> Seq.filter (fun (c,s) -> s.Length>=20)
+    |> Seq.iter (fun (c,s)->printfn "%s" s)
 
 
 [<EntryPoint>]
