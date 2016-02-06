@@ -221,7 +221,9 @@ let glob (S:Map<char*char,int>) (s:string) (t:string) =
     helper(s.Length,t.Length)
 
 // see https://en.wikipedia.org/wiki/Needleman%E2%80%93Wunsch_algorithm
-// arriving at the wrong answer, not sure why.
+// We need to accomodate the possibility the optimal match has gaps at the end of one string.
+// We can do this by manually inserting a gap in one of the strings. 
+// I haven't figured out why but we need to add the gap penalty as well.
 let globConstgap (S:Map<char*char,int>) (s:string) (t:string) = 
     let g = -5
     let rpt x = [for i in 1..x do yield "-"]|>String.concat ""   
@@ -240,10 +242,18 @@ let globConstgap (S:Map<char*char,int>) (s:string) (t:string) =
                 let (a2,b2,c2)= helper(i,j-1)
                 yield ((penalizeEnd b2)+a2,b2+"-",c2+string t.[j-1])
                 let (a3,b3,c3)= helper(i-1,j-1)
-                let di=S.[(s.[i-1],t.[j-1])]
+                let di=
+                    if (s.[i-1]='-' || t.[j-1]='-') then  g
+                        //if b3.EndsWith("-") || c3.EndsWith("-") then g
+                        //else g
+                    else 
+                        S.[(s.[i-1],t.[j-1])]
                 yield (di+a3,b3+string s.[i-1],c3+string t.[j-1])
             } 
             |> Seq.maxBy (fun (a,b,c)->a))
+  (*  for i in [0..s.Length] do
+        for j in [0..t.Length] do
+            eprintfn "%d %d %A" i j (helper(i,j))*)
     helper(s.Length,t.Length)
 
 let doEdta()=
@@ -280,8 +290,18 @@ let doGCon() =
     getData "gcon"
     |> parseFasta
     |> Array.ofSeq
-    |> fun a -> globConstgap BLOSUM62 a.[0].String a.[1].String
-    |> fun (cost,_,_) -> printfn "%d" cost
+    |> fun a -> 
+        [
+            (globConstgap BLOSUM62 (a.[0].String+"-") a.[1].String)
+            (globConstgap BLOSUM62 a.[0].String (a.[1].String+"-"))
+            (globConstgap BLOSUM62 a.[0].String a.[1].String)
+        ]
+    |> List.map (fun (cost,_,_)->cost)
+    |> fun l -> printfn "%A" l; l
+    |> List.zip [ -5 ; -5 ; 0]
+    |> List.map (fun (x,y) -> x+y)
+    |> List.max
+    |> printfn "%d" 
 
 [<EntryPoint>]
 let main argv = 

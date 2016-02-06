@@ -108,18 +108,31 @@ let doLing s =
     (sub s, m 4L (int64 s.Length))
     |> fun (s,m)-> (float s)/(float m)
     
+let findAllSubstrings (s:string) (candidate:string) =
+    Seq.unfold (fun i -> 
+                    let i' = s.IndexOf(candidate,i+1)
+                    if i'<0 then None
+
+                    else Some(i',i')) -1
+    |> fun sq -> eprintfn "%s: %A" candidate sq; sq
+
+let validateIsMRep (s:string) positions =
+    seq {
+        for i in positions do
+            for j in positions do
+                if i<>j then
+                    if i=0 || j=0 || s.[i-1]<>s.[j-1] then yield i                    
+    }
+    |> fun s ->
+        Seq.length s>0 
+
 // remove substrings
-let filterStrings (ss:(int*string) seq) =
-    ss
-    |> Seq.sortBy (fun (_,s) -> s.Length)
-    |> Array.ofSeq 
-    |> fun a -> 
-        [0..a.Length-1] 
-        |> Seq.map (fun i ->
-                [i+1..a.Length-1]
-                |> Seq.fold (fun b j -> b||(snd a.[j]).Contains(snd a.[i])) false
-                |> fun b -> if not b then Some(a.[i]) else None)
-        |> Seq.choose id
+let filterStrings (s:string) (candidates:string seq) =
+    candidates
+    |> Seq.map (fun c -> c,findAllSubstrings s c) 
+    |> Seq.map (fun (c,positions) -> c,validateIsMRep s positions)
+    |> Seq.filter (fun (c,valid)->valid)
+    |> Seq.map (fun (c,valid)->c)
 
 let rec mrep (s:string,t:SuffixTree2) =
     let helper (kix,klen) m2 =
@@ -144,20 +157,28 @@ let rec mrep (s:string,t:SuffixTree2) =
                     if Seq.isEmpty r then // none of the children is a candidate to extend
                         seq {yield (Seq.length m2, s.Substring(kix,klen))}
                     else 
-                        r // we can extend the string longer
+                        seq {
+                            yield (Seq.length m2, s.Substring(kix,klen))
+                            yield! r}
+                        //r // we can extend the string longer
                       //  |> Seq.map (fun (c,s')->c,s.Substring(kix,klen)+s') )
                       )
         |> Seq.concat
-        |> filterStrings
+      //  |> filterStrings s
 
 let doMrep() =
-    getData "mrep"
-    |> splitNewline
-    |> Seq.take 1 |> Seq.exactlyOne
+    let input =
+        getData "mrep"
+        |> splitNewline
+        |> Seq.take 1 |> Seq.exactlyOne
+    input
     |> naiveMakeSuffixTree2
     |> mrep
+    |> fun s -> eprintfn "%A" s; s
     |> Seq.filter (fun (c,s) -> s.Length>=20)
-    |> Seq.iter (fun (c,s)->printfn "%s" s)
+    |> Seq.map (fun (c,s)->s)
+    |> filterStrings input
+    |> Seq.iter (printfn "%s")
 
 
 [<EntryPoint>]
