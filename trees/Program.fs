@@ -648,10 +648,10 @@ getData "chbp"
    // |> fun t -> toAdj t, t
    // |> 
     |> validateTree
-    |> render
-    (*
+//    |> render
+    
     |> assignTaxa taxa
-    |> Seq.iter (printfn "%A") *)
+    //|> Seq.iter (printfn "%A") *)
 
 // TODO: fix this.
 let rec makePhylogeny tree split  =
