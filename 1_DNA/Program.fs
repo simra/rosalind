@@ -2262,16 +2262,10 @@ let cunr n =
             else
                 FactBig (bigint (2L*n-4L))/(FactBig (bigint (n-2L)))/(powBig (2L,(n-2L)))%(bigint 1000000)|>int64
 
-// root: there are 2^n-1 rooted binary trees. [INCORRECT]
+// root: Unrooted tree has 2n-3 edges, so there are 2n-3 places to choose a root for each unrooted tree
 let root n =
-    let rec helper n' = 
-        if n' = 0 then 1
-        else (2*(helper (n'-1)))%1000000
-    let result=helper n
-    //eprintfn "%A" result
-    if result=0 then 1000000-1
-    else result-1
-
+    ((2L*n-3L)*(cunr n))%1000000L
+    
 // pcov is highly simplified- no reverse complements and the input has only one cycle.
 // for perf reasons we may need a suffix tree.
 getData "pcov"
@@ -2407,12 +2401,16 @@ type SuffixTree =
     | Leaf
 
 let naiveMakeSuffixTree (s:string) =
-    let matchStr x y =       
-        // ugh slow
+    let matchStr (x:string) (y:string) =
+        let mutable i=0
+        while i<x.Length && i<y.Length && x.[i]=y.[i] do
+            i<-i+1
+        x.Substring(0,i)       
+        (* // ugh slow
         Seq.zip x y
         |> Seq.takeWhile (fun (a,b)-> a=b)
         |> Seq.map (fun (a,_)-> string a)
-        |> String.concat ""
+        |> String.concat "" *)
         //|> fun sOut -> 
             //eprintfn "x:%s y:%s s:%s" x y sOut
         //    sOut
