@@ -160,6 +160,25 @@ let ctea (s:string) (t:string) =
 
 
 
+let readScoreMtx s =
+    s
+    |> splitNewline
+    |> fun toks -> 
+        let alph=
+            toks.[0].Split([|' '|],StringSplitOptions.RemoveEmptyEntries)
+            |> Seq.mapi (fun i c -> (i+1,c.[0]))
+            |> Map.ofSeq
+        toks.[1..toks.Length-1]
+        |> Seq.fold (fun (m:Map<char*char,int>) (l:string) ->
+            let arr=l.Split([|' '|],StringSplitOptions.RemoveEmptyEntries)
+            let c1=arr.[0].[0]
+            arr.[1..arr.Length-1]
+            |> Seq.mapi (fun i v -> (i+1,int v))
+            |> Seq.fold (fun m' (j,v) -> Map.add (c1,alph.[j]) v m') m) Map.empty
+        
+
+
+
 let BLOSUM62 =
     @"A  C  D  E  F  G  H  I  K  L  M  N  P  Q  R  S  T  V  W  Y
 A  4  0 -2 -1 -2  0 -2 -1 -1 -1 -1 -2 -1 -1 -1  1  0  0 -3 -2
@@ -182,20 +201,31 @@ T  0 -1 -1 -1 -2 -2 -2 -1 -1 -1 -1  0 -1 -1 -1  1  5  0 -2 -2
 V  0 -1 -3 -2 -1 -3 -3  3 -2  1  1 -3 -2 -2 -3 -2  0  4 -3 -1
 W -3 -2 -4 -3  1 -2 -2 -3 -3 -2 -1 -4 -4 -2 -3 -3 -2 -3 11  2
 Y -2 -2 -3 -2  3 -3  2 -1 -2 -1 -1 -2 -3 -1 -2 -2 -2 -1  2  7"
-    |> splitNewline
-    |> fun toks -> 
-        let alph=
-            toks.[0].Split([|' '|],StringSplitOptions.RemoveEmptyEntries)
-            |> Seq.mapi (fun i c -> (i+1,c.[0]))
-            |> Map.ofSeq
-        toks.[1..toks.Length-1]
-        |> Seq.fold (fun (m:Map<char*char,int>) (l:string) ->
-            let arr=l.Split([|' '|],StringSplitOptions.RemoveEmptyEntries)
-            let c1=arr.[0].[0]
-            arr.[1..arr.Length-1]
-            |> Seq.mapi (fun i v -> (i+1,int v))
-            |> Seq.fold (fun m' (j,v) -> Map.add (c1,alph.[j]) v m') m) Map.empty
-        
+    |> readScoreMtx
+
+let PAM250 =
+    @"A  C  D  E  F  G  H  I  K  L  M  N  P  Q  R  S  T  V  W  Y
+A  2 -2  0  0 -3  1 -1 -1 -1 -2 -1  0  1  0 -2  1  1  0 -6 -3
+C -2 12 -5 -5 -4 -3 -3 -2 -5 -6 -5 -4 -3 -5 -4  0 -2 -2 -8  0
+D  0 -5  4  3 -6  1  1 -2  0 -4 -3  2 -1  2 -1  0  0 -2 -7 -4
+E  0 -5  3  4 -5  0  1 -2  0 -3 -2  1 -1  2 -1  0  0 -2 -7 -4
+F -3 -4 -6 -5  9 -5 -2  1 -5  2  0 -3 -5 -5 -4 -3 -3 -1  0  7
+G  1 -3  1  0 -5  5 -2 -3 -2 -4 -3  0  0 -1 -3  1  0 -1 -7 -5
+H -1 -3  1  1 -2 -2  6 -2  0 -2 -2  2  0  3  2 -1 -1 -2 -3  0
+I -1 -2 -2 -2  1 -3 -2  5 -2  2  2 -2 -2 -2 -2 -1  0  4 -5 -1
+K -1 -5  0  0 -5 -2  0 -2  5 -3  0  1 -1  1  3  0  0 -2 -3 -4
+L -2 -6 -4 -3  2 -4 -2  2 -3  6  4 -3 -3 -2 -3 -3 -2  2 -2 -1
+M -1 -5 -3 -2  0 -3 -2  2  0  4  6 -2 -2 -1  0 -2 -1  2 -4 -2
+N  0 -4  2  1 -3  0  2 -2  1 -3 -2  2  0  1  0  1  0 -2 -4 -2
+P  1 -3 -1 -1 -5  0  0 -2 -1 -3 -2  0  6  0  0  1  0 -1 -6 -5
+Q  0 -5  2  2 -5 -1  3 -2  1 -2 -1  1  0  4  1 -1 -1 -2 -5 -4
+R -2 -4 -1 -1 -4 -3  2 -2  3 -3  0  0  0  1  6  0 -1 -2  2 -4
+S  1  0  0  0 -3  1 -1 -1  0 -3 -2  1  1 -1  0  2  1 -1 -2 -3
+T  1 -2  0  0 -3  0 -1  0  0 -2 -1  0  0 -1 -1  1  3  0 -5 -3
+V  0 -2 -2 -2 -1 -1 -2  4 -2  2  2 -2 -1 -2 -2 -1  0  4 -6 -2
+W -6 -8 -7 -7  0 -7 -3 -5 -3 -2 -4 -4 -6 -5  2 -2 -5 -6 17  0
+Y -3  0 -4 -4  7 -5  0 -1 -4 -1 -2 -2 -5 -4 -4 -3 -3 -2  0 10"
+    |> readScoreMtx
 
 let glob (S:Map<char*char,int>) (s:string) (t:string) = 
     let g = -5
@@ -256,6 +286,53 @@ let globConstgap (S:Map<char*char,int>) (s:string) (t:string) =
             eprintfn "%d %d %A" i j (helper(i,j))*)
     helper(s.Length,t.Length)
 
+
+
+let loca (S:Map<char*char,int>) (s:string) (t:string) = 
+    let g = -5
+    let rpt x = [for i in 1..x do yield "-"]|>String.concat ""   
+    let rec helper = memoize (fun (i:int,j:int) ->
+        //eprintfn "%d %d" i j
+        if i = 0 then
+            if j = 0 then (0,"","")
+            else (j*g,rpt j,t.Substring(0,j))
+        else if j = 0 then
+            (i*g,s.Substring(0,i),rpt i)
+        else    
+            seq {
+                let (a1,b1,c1)= helper(i-1,j)
+                yield (g+a1,b1+string s.[i-1],c1+"-")
+                let (a2,b2,c2)= helper(i,j-1)
+                yield (g+a2,b2+"-",c2+string t.[j-1])
+                let (a3,b3,c3)= helper(i-1,j-1)
+                let di=S.[(s.[i-1],t.[j-1])]
+                yield (di+a3,b3+string s.[i-1],c3+string t.[j-1])
+            } 
+            |> Seq.maxBy (fun (a,b,c)->a))
+    seq {
+        for i in [0..s.Length] do
+            for j in [0..t.Length] do
+                yield helper(i,j)
+    }
+    |> Seq.maxBy (fun (score,_,_)->score)
+    //helper(s.Length,t.Length)
+
+// is there a faster way?
+let doLoca() =
+    getData "loca"
+    |> parseFasta
+    |> Array.ofSeq
+    |> fun a -> 
+        let s=a.[0].String
+        let t=a.[1].String
+        seq {
+            for i in [0..s.Length-1] do
+                for j in [0..t.Length-1] do
+                    yield (loca PAM250 (s.Substring(i)) (t.Substring(j)))
+        }
+    |> Seq.maxBy (fun (score,_,_)->score)
+    |> printfn "%A"
+
 let doEdta()=
     getData "edta"
     |> parseFasta
@@ -305,6 +382,6 @@ let doGCon() =
 
 [<EntryPoint>]
 let main argv = 
-    doGCon()
+    doLoca()
 
     0 // return an integer exit code
