@@ -2531,6 +2531,25 @@ getData "gasm"
     findGasmSuperstring maxk reads m (BinomialHeapPQ.insert (uint32 seed.Length) seed BinomialHeapPQ.empty,Set.add seed Set.empty)
     |> printfn "%s"
 
+
+let sexl (x:float) =
+    // x is the probability that a male contains the recessive allele
+    // I got to this via regression rather than derivation.
+    // I had something close (x-x*x), not sure where the 2 comes from.
+    2.*(x-x*x)
+    
+getData "sexl"
+|> splitNewline
+|> Seq.take 1 |> Seq.exactlyOne
+|> fun l -> l.Split(' ') 
+|> Array.map float
+|> Array.map sexl
+|> Array.map string
+|> String.concat " "
+|> printfn "%s"
+    
+
+
 [<EntryPoint>]
 let main argv = 
     // dna

@@ -234,7 +234,7 @@ let ctbl t =
     |> Seq.map (getCharRow edges)
     |> Seq.groupBy id
     |> Seq.map (fun (k,v)->k)
-    |> Seq.iter (printfn "%s")
+    
 
 
 getData "ctbl"
@@ -242,7 +242,7 @@ getData "ctbl"
 |> Seq.exactlyOne
 |> parseTree
 |> ctbl
-
+|> Seq.iter (printfn "%s")
 
 // NKEW.
 // So the question is do I refactor the newick code above or rewrite it here...
@@ -903,6 +903,31 @@ getData "ghbp"
 |> unrootTree
 |> printTree
 |> printfn "%s;"
+
+// sptd
+let complementChar (s:string) =
+    s
+    |>Seq.map (fun c -> if c='0' then '1' else '0')
+    |>Seq.map string
+    |> String.concat ""
+
+// functionally correct but too slow.
+getData "sptd"
+|> splitNewline
+|> List.ofArray
+|> fun (head::tail) ->
+    let n=head.Split(' ')|> fun a -> a.Length
+    tail
+    |> Seq.map parseTree
+    |> Seq.map ctbl
+    |> Array.ofSeq
+    |> fun a ->
+        let c0 = Set.ofSeq a.[0]
+        a.[1]
+        |> Seq.map (fun s -> if (Set.contains s c0) || (Set.contains (complementChar s) c0) then 1 else 0)
+        |> Seq.sum
+        |> fun s-> 2*(n-3)-2*s
+|> printfn "%A"
 
 [<EntryPoint>]
 let main argv = 

@@ -261,33 +261,44 @@ let globConstgap (S:Map<char*char,int>) (s:string) (t:string) =
     let rec helper = memoize (fun (i:int,j:int) ->
         //eprintfn "%d %d" i j
         if i = 0 then
-            if j = 0 then (0,"","")
-            else (g,rpt j,t.Substring(0,j))
+            if j = 0 then [(0,"","")]
+            else [(g,rpt j,t.Substring(0,j))]
         else if j = 0 then
-            (g,s.Substring(0,i),rpt i)
+            [(g,s.Substring(0,i),rpt i)]
         else    
-            seq {
-                let (a1,b1,c1)= helper(i-1,j)
-                yield ((penalizeEnd c1)+a1,b1+string s.[i-1],c1+"-")
-                let (a2,b2,c2)= helper(i,j-1)
-                yield ((penalizeEnd b2)+a2,b2+"-",c2+string t.[j-1])
-                let (a3,b3,c3)= helper(i-1,j-1)
-                let di=
-                    if (s.[i-1]='-' || t.[j-1]='-') then  g
+            [
+                    helper(i-1,j)
+                    |> List.map (fun (a1,b1,c1) -> ((penalizeEnd c1)+a1,b1+string s.[i-1],c1+"-"))
+
+                    helper(i,j-1)
+                    |> List.map (fun (a2,b2,c2) -> ((penalizeEnd b2)+a2,b2+"-",c2+string t.[j-1]))
+                
+                    helper(i-1,j-1)
+                    |> List.map (fun (a3,b3,c3) ->
+                        let di=
+                        //if (s.[i-1]='-' || t.[j-1]='-') then  g
                         //if b3.EndsWith("-") || c3.EndsWith("-") then g
                         //else g
-                    else 
-                        S.[(s.[i-1],t.[j-1])]
-                yield (di+a3,b3+string s.[i-1],c3+string t.[j-1])
-            } 
-            |> Seq.maxBy (fun (a,b,c)->a))
+                    //else 
+                            S.[(s.[i-1],t.[j-1])]
+                        (di+a3,b3+string s.[i-1],c3+string t.[j-1]))
+               ]
+               |> List.concat
+               |> List.map (fun l -> printfn "%A" l; l)
+               |> List.groupBy (fun (_,s',t')-> s'.EndsWith("-")||t'.EndsWith("-"))
+               |> List.map (fun (b,l) ->
+                    l|> List.maxBy(fun (c,_,_)->c))
+                    //else [l|>List.maxBy (fun (c,_,_)->c)] )
+              // |> List.concat     
+                    )
+            //|> Seq.maxBy (fun (a,b,c)->a))
   (*  for i in [0..s.Length] do
         for j in [0..t.Length] do
             eprintfn "%d %d %A" i j (helper(i,j))*)
     helper(s.Length,t.Length)
+    |> List.maxBy (fun (c,_,_)->c)
 
-
-
+    (*
 let loca (S:Map<char*char,int>) (s:string) (t:string) = 
     let g = -5
     let rpt x = [for i in 1..x do yield "-"]|>String.concat ""   
@@ -295,9 +306,9 @@ let loca (S:Map<char*char,int>) (s:string) (t:string) =
         //eprintfn "%d %d" i j
         if i = 0 then
             if j = 0 then (0,"","")
-            else (j*g,rpt j,t.Substring(0,j))
+            else (0,rpt j,t.Substring(0,j))
         else if j = 0 then
-            (i*g,s.Substring(0,i),rpt i)
+            (0,s.Substring(0,i),rpt i)
         else    
             seq {
                 let (a1,b1,c1)= helper(i-1,j)
@@ -309,6 +320,7 @@ let loca (S:Map<char*char,int>) (s:string) (t:string) =
                 yield (di+a3,b3+string s.[i-1],c3+string t.[j-1])
             } 
             |> Seq.maxBy (fun (a,b,c)->a))
+            |> fun (a,b,c) -> if a<0 then (0,"","") else (a,b,c)
     seq {
         for i in [0..s.Length] do
             for j in [0..t.Length] do
@@ -332,7 +344,7 @@ let doLoca() =
         }
     |> Seq.maxBy (fun (score,_,_)->score)
     |> printfn "%A"
-
+    *)
 let doEdta()=
     getData "edta"
     |> parseFasta
@@ -368,20 +380,20 @@ let doGCon() =
     |> parseFasta
     |> Array.ofSeq
     |> fun a -> 
-        [
-            (globConstgap BLOSUM62 (a.[0].String+"-") a.[1].String)
-            (globConstgap BLOSUM62 a.[0].String (a.[1].String+"-"))
+        //[
+        //    (globConstgap BLOSUM62 (a.[0].String+"-") a.[1].String)
+        //    (globConstgap BLOSUM62 a.[0].String (a.[1].String+"-"))
             (globConstgap BLOSUM62 a.[0].String a.[1].String)
-        ]
-    |> List.map (fun (cost,_,_)->cost)
-    |> fun l -> printfn "%A" l; l
-    |> List.zip [ -5 ; -5 ; 0]
-    |> List.map (fun (x,y) -> x+y)
-    |> List.max
-    |> printfn "%d" 
+        //]
+    //|> List.map (fun (cost,_,_)->cost)
+    //|> fun l -> printfn "%A" l; l
+    //|> List.zip [ -5 ; -5 ; 0]
+    //|> List.map (fun (x,y) -> x+y)
+    //|> List.max
+    |> printfn "%A" 
 
 [<EntryPoint>]
 let main argv = 
-    doLoca()
+    doGCon()
 
     0 // return an integer exit code
