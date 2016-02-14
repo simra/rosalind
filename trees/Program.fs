@@ -21,6 +21,25 @@ let rec C n k =
         |> int64
 
 
+open System.Collections.Generic
+ // some handy dynamic programming snippets from http://www.fssnip.net/8P
+ /// The function creates a function that calls the argument 'f'
+ /// only once and stores the result in a mutable dictionary (cache)
+ /// Repeated calls to the resulting function return cached values.
+let memoize f =    
+   // Create (mutable) cache that is used for storing results of 
+   // for function arguments that were already calculated.
+    let cache = new Dictionary<_, _>()
+    (fun x ->
+       // The returned function first performs a cache lookup
+       let succ, v = cache.TryGetValue(x)
+       if succ then v else 
+         // If value was not found, calculate & cache it
+         let v = f(x) 
+         cache.Add(x, v)
+         v)
+
+
 type NwckTree =
     | Leaf of string
     | Anon
@@ -172,6 +191,7 @@ let toEdges t =
     |>Seq.concat
 
 let isAnon s = Regex.IsMatch(s,@"anon_\d+")
+
 
 let getCharRow edges (rem1,rem2) =
     edges
@@ -911,20 +931,71 @@ let complementChar (s:string) =
     |>Seq.map string
     |> String.concat ""
 
+// a faster tree->character mapper
+let rec getSubset =
+        memoize (fun t ->
+            match t with 
+            | Leaf(s) -> s
+            | Internal(s,l) ->   
+                l
+                |> List.map getSubset
+                |> String.concat ",")
+
+let taxaCount = memoize (fun mapping -> mapping|>Map.toSeq|>Seq.length)
+    
+let rec getCharacters (mapping:Map<string,int>) tree =
+    
+    let makeCharacter(s:string) =
+        s.Split(',')
+        |> Seq.map (fun t -> mapping.[t])
+        |> Seq.sort
+        |> Seq.map string
+        |> String.concat ","
+
+    match tree with
+    | Leaf(s) ->  
+        seq { yield makeCharacter s }
+    | Internal(s,l) ->
+        seq {
+            for t in l do 
+                yield makeCharacter (getSubset t)
+                yield! getCharacters mapping t
+        }
+
+let getNonTrivialCharacters mapping tree =
+    getCharacters mapping tree
+    |> Seq.countBy id
+    |> Seq.map (fun (k,c)->k)
+    |> Seq.filter (fun s -> s.Split(',').Length>1)
+
+let complementTaxa taxa (inSet:string) =
+    let chkSet =
+        inSet.Split(',')
+        |> Set.ofArray
+            
+    taxa
+    |> Map.toSeq
+    |> Seq.map (fun (t,i)->i)
+    |> Seq.filter (fun i-> not (Set.contains (string i) chkSet))
+    |> Seq.sort
+    |> Seq.map string
+    |> String.concat ","
+
 // functionally correct but too slow.
 getData "sptd"
 |> splitNewline
 |> List.ofArray
 |> fun (head::tail) ->
-    let n=head.Split(' ')|> fun a -> a.Length
+    let taxa = head.Split(' ')|> Seq.mapi (fun i t -> (t,i))|>Map.ofSeq
+    let n = head.Split(' ').Length
     tail
     |> Seq.map parseTree
-    |> Seq.map ctbl
+    |> Seq.map (getNonTrivialCharacters taxa)
     |> Array.ofSeq
     |> fun a ->
         let c0 = Set.ofSeq a.[0]
         a.[1]
-        |> Seq.map (fun s -> if (Set.contains s c0) || (Set.contains (complementChar s) c0) then 1 else 0)
+        |> Seq.map (fun s -> if (Set.contains s c0) || (Set.contains (complementTaxa taxa s) c0) then 1 else 0)
         |> Seq.sum
         |> fun s-> 2*(n-3)-2*s
 |> printfn "%A"
