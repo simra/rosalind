@@ -2548,7 +2548,21 @@ getData "sexl"
 |> String.concat " "
 |> printfn "%s"
     
+// asmq
+let Nstat xx (contigs:string seq) =
+    let tot = contigs |> Seq.map (fun c -> c.Length) |> Seq.sum
+    
+    let mutable running = 0
+    contigs
+    |> Seq.sortBy (fun c -> -c.Length)
+    |> Seq.map (fun c -> running<-running+c.Length; (running*100/tot<xx,c.Length))
+    |> Seq.find (fun (test,l)->not test)
+    |> fun (_,l) -> l
 
+getData "asmq"
+|> splitNewline
+|> fun s -> Nstat 50 s, Nstat 75 s
+|> printfn "%A"
 
 [<EntryPoint>]
 let main argv = 
