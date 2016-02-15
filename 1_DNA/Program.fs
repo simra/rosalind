@@ -2564,6 +2564,82 @@ getData "asmq"
 |> fun s -> Nstat 50 s, Nstat 75 s
 |> printfn "%A"
 
+// pdpl
+// 1. the largest value give the longest length, and without loss of generality we can use the second-largest value to place the next element.
+// 2. differences can 'vote' for locations- like hough transform [wasn't needed- took a greedy approach]
+// 3. as we add sites we can remove differences from the list.
+// seems easy but how to do this functionally?
+module Seq =
+    let takeUntil pred (xs : _ seq) = seq{
+        use en = xs.GetEnumerator()
+        let flag = ref true
+        while !flag && en.MoveNext() do
+            flag := not <| pred en.Current
+            yield en.Current }
+
+let removeFirstElt x l =
+    let mutable found = false
+    seq {
+        for xx in l do
+            if xx=x then
+                if found then yield xx
+                found <- true
+            else if x<>xx then yield xx 
+    }
+    |> List.ofSeq
+
+let meetsCriteria x currList differences =
+    let (outMeets,outDiff) =
+        currList
+        |> List.map (fun y -> abs (x-y))
+        |> Seq.fold (fun (currResult,currDifferences) d -> 
+            (currResult && List.contains d currDifferences, removeFirstElt d currDifferences)) (true,differences)
+    if outMeets then Some(outDiff) else None
+
+
+
+let takePairs differences =
+    let max=Seq.max differences
+    
+    // outlist is the current set of loci    
+    let rec findNext currList remainingDifferences : int list option =
+        eprintfn "curr: %A\nremain: %A" currList remainingDifferences
+        match remainingDifferences with
+        | [] -> Some(currList)
+        | _ -> 
+            let checkDifferences = [List.head remainingDifferences; max-List.head remainingDifferences]
+            checkDifferences
+            |> Seq.map 
+                (fun x-> 
+                    match meetsCriteria x currList remainingDifferences with
+                    | Some(updatedDifferences) ->
+                        findNext (x::currList) updatedDifferences
+                    | None -> None)
+            |> Seq.takeUntil Option.isSome
+            |> List.ofSeq
+            |> List.rev
+            |> fun (head::tail) -> head
+            
+
+    let coreDifferences = removeFirstElt max differences |> List.sortDescending
+    findNext [0;max] coreDifferences
+
+getData "pdpl"
+|> fun s -> s.Split(' ')
+|> Seq.map int
+|> List.ofSeq
+|> takePairs
+|> fun r ->
+    match r with
+    | Some(l) ->
+        l
+        |> List.sort
+        |> List.map string
+        |> String.concat " "
+        |> printfn "%s"
+    | None -> ()
+
+
 [<EntryPoint>]
 let main argv = 
     // dna
