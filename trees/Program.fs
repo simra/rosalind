@@ -1000,6 +1000,21 @@ getData "sptd"
         |> fun s-> 2*(n-3)-2*s
 |> printfn "%A"
 
+// pdpl
+// 1. the largest value give the longest length, and without loss of generality we can use the second-largest value to place the next element.
+// 2. differences can 'vote' for locations- like hough transform
+// 3. as we add sites we can remove differences from the list.
+// seems easy but how to do this functionally?
+let takePairs outList differences =
+    
+
+getData "pdpl"
+|> fun s -> s.Split(' ')
+|> Seq.map int
+|> Seq.sortDescending
+|> Seq.unfold takePairs List.empty
+
+
 [<EntryPoint>]
 let main argv = 
     printfn "%A" argv
