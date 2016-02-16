@@ -2,6 +2,7 @@
 // See the 'F# Tutorial' project for more help.
 open System
 open System.IO
+open System.Collections.Generic
 
 let (@@) folder filename = Path.Combine(folder,filename)
 let data_root = @"c:\GitHub\rosalind\data"
@@ -66,6 +67,18 @@ let binom (p:float) (n:int64) (k:int64) =
         N (float n*p) (float n*p*(1.-p)) (float k)
     else
         float (C n k)*(p**(float k))*((1.0-p)**float (n-k))
+
+module Seq =
+    let takeUntil pred (xs : _ seq) = seq{
+        use en = xs.GetEnumerator()
+        let flag = ref true
+        while !flag && en.MoveNext() do
+            flag := not <| pred en.Current
+            yield en.Current }
+    let unique (s : _ seq) = 
+        Seq.groupBy id s
+        |> Seq.map (fun (k,v)->k)
+
 
 open System.Collections.Generic
  // some handy dynamic programming snippets from http://www.fssnip.net/8P
@@ -2569,13 +2582,6 @@ getData "asmq"
 // 2. differences can 'vote' for locations- like hough transform [wasn't needed- took a greedy approach]
 // 3. as we add sites we can remove differences from the list.
 // seems easy but how to do this functionally?
-module Seq =
-    let takeUntil pred (xs : _ seq) = seq{
-        use en = xs.GetEnumerator()
-        let flag = ref true
-        while !flag && en.MoveNext() do
-            flag := not <| pred en.Current
-            yield en.Current }
 
 let removeFirstElt x l =
     let mutable found = false
@@ -2638,6 +2644,48 @@ getData "pdpl"
         |> String.concat " "
         |> printfn "%s"
     | None -> ()
+
+
+// grep
+let rec grep (current:string) (edges:Map<string,string list>) (counts:Map<string,int>) : string seq = 
+        //eprintfn "Curr: %s M[s]: %A" current (if Map.containsKey current covered then covered.[current] else [])        
+        let outCounts = edges.[current]|>List.map (fun e -> counts.[e])|>List.sum
+        //eprintfn "current: %s edges: %A outCounts: %d" current edges.[current] outCounts
+        if outCounts=0 then seq {yield "" }
+        else
+            edges.[current]
+            |> List.filter (fun e -> counts.[e]>0)
+            |> List.map (fun e ->
+                let c' = e.Substring(e.Length-1)
+                let counts' = Map.add e (counts.[e]-1) counts
+                //eprintfn "e: %s counts': %A" e counts'.[e]
+                grep e edges counts'
+                |> Seq.map ((+) c'))
+            |> Seq.concat
+       
+
+getData "grep"
+|> splitNewline
+|> fun strs ->
+    let uniqStrs=strs|>Seq.unique
+    let edges=
+        uniqStrs
+        |> Seq.unique
+        |> Seq.fold (fun m s ->        
+            Map.add s (uniqStrs|>Seq.filter (fun s2 -> s2.StartsWith(s.Substring(1)))|>List.ofSeq) m
+        ) Map.empty
+    let counts = strs |> Seq.countBy id |> Map.ofSeq
+    strs.[0],edges,counts
+|> fun (seed,edges,counts) ->
+    grep seed edges counts
+    |> Seq.map (fun s -> seed+s)
+    |> Seq.map (fun s -> s.Substring(0,s.Length-seed.Length))
+|> Seq.groupBy id
+|> Seq.map (fun (k,v)->k)
+|> Seq.groupBy (fun s -> s.Length)
+|> Seq.maxBy (fun (k,v)->k)
+|> fun (k,l) -> l|>Seq.iter (printfn "%s")
+
 
 
 [<EntryPoint>]
