@@ -2686,7 +2686,41 @@ getData "grep"
 |> Seq.maxBy (fun (k,v)->k)
 |> fun (k,l) -> l|>Seq.iter (printfn "%s")
 
-
+// wfmd
+// works for the sample but not the edge case input:
+// need to address the case where we start with N individuals having the dominant gene (k=2N).  If everyone has it, is the result zero?
+let wfmd (n:int64) (m:int64) (g:int64) (k:int64) =
+    // note here n is 2N 
+    // binomial
+    let f (k':int64) (p:float) = (float (C n k'))*(p**(float k'))*(1.-p)**(float (n-k'))
+        
+    // given the current 
+    let p' p =
+        eprintfn "%A" p
+        p
+        |> Array.mapi (fun i p_i -> 
+            // basically we need to convolve.
+            // p_i is the probability of exactly i in generation p.
+            // need to compute the probability of j in generation p, given pk.
+            let p_i' = (float (i+1))/(float n)
+            p
+            |> Array.mapi (fun j _ -> 
+                p_i * (f (int64 (j+1)) p_i')))
+        |> Array.reduce (fun s1 s2 -> Array.zip s1 s2|>Array.map (fun (a,b) -> a+b))
+    let p0=Array.zeroCreate (int n)
+    p0.[int (n-m-1L)]<-1.
+    Seq.unfold (fun (p:float[],g':int64) -> 
+        if g'=0L then None else
+            let result=p' p
+            Some(result,(result,(g'-1L)))) (p0,g)
+    |> List.ofSeq
+    |> List.rev
+    |> fun (head::tail) ->
+        head
+        |> Seq.mapi (fun i pi -> if (int64 i+1L)>=k then pi else 0.) // probability of selecting recessive gene
+        |> Seq.sum
+    
+         
 
 [<EntryPoint>]
 let main argv = 
