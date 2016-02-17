@@ -2694,7 +2694,7 @@ let wfmd (n:int64) (m:int64) (g:int64) (k:int64) =
     // binomial
     let f (k':int64) (p:float) = (float (C n k'))*(p**(float k'))*(1.-p)**(float (n-k'))
         
-    // given the current 
+    // given the current generation, compute the next.
     let p' p =
         eprintfn "%A" p
         p
@@ -2708,7 +2708,7 @@ let wfmd (n:int64) (m:int64) (g:int64) (k:int64) =
                 p_i * (f (int64 (j+1)) p_i')))
         |> Array.reduce (fun s1 s2 -> Array.zip s1 s2|>Array.map (fun (a,b) -> a+b))
     let p0=Array.zeroCreate (int n)
-    p0.[int (n-m-1L)]<-1.
+    p0.[int (n-m-1L)]<-1. // initialize with the number of recessive geners
     Seq.unfold (fun (p:float[],g':int64) -> 
         if g'=0L then None else
             let result=p' p
@@ -2720,7 +2720,62 @@ let wfmd (n:int64) (m:int64) (g:int64) (k:int64) =
         |> Seq.mapi (fun i pi -> if (int64 i+1L)>=k then pi else 0.) // probability of selecting recessive gene
         |> Seq.sum
     
-         
+// ebin
+let e n p = n*p
+getData "ebin"
+|> splitNewline
+|> fun a -> (float a.[0], a.[1].Split(' ')|>Seq.map float)
+|> fun (n,p) -> p|>Seq.map (e n)
+|> Seq.map string
+|> String.concat " "
+|> printfn "%s"        
+
+// foun
+// modified wfmd to take number of recessive alleles, rather than dominant.
+let wfmd2 (n:int64) (m:int64) (g:int64) (k:int64) =
+    // note here n is 2N 
+    // binomial
+    let f (k':int64) (p:float) = (float (C n k'))*(p**(float k'))*(1.-p)**(float (n-k'))
+        
+    // given the current generation, compute the next.
+    let p' p =
+        //eprintfn "%A" p
+        p
+        |> Array.mapi (fun i p_i -> 
+            // basically we need to convolve.
+            // p_i is the probability of exactly i in generation p.
+            // need to compute the probability of j in generation p, given pk.
+            let p_i' = (float (i+1))/(float n)
+            p
+            |> Array.mapi (fun j _ -> 
+                p_i * (f (int64 (j+1)) p_i')))
+        |> Array.reduce (fun s1 s2 -> Array.zip s1 s2|>Array.map (fun (a,b) -> a+b))
+    let p0=Array.zeroCreate (int n)
+    if m-1L>=0L then
+        p0.[int (m-1L)]<-1. // initialize with the number of recessive genes
+    Seq.unfold (fun (p:float[],g':int64) -> 
+        if g'=0L then None else
+            let result=p' p
+            Some(result,(result,(g'-1L)))) (p0,g)
+    |> List.ofSeq
+    |> List.rev
+    |> fun (head::tail) ->
+        head
+        |> Seq.mapi (fun i pi -> if (int64 i+1L)>=k then pi else 0.) // probability of selecting recessive gene
+        |> Seq.sum
+
+getData "foun"
+|> splitNewline
+|> fun a ->
+    a.[0].Split(' '),a.[1].Split(' ')
+|> fun (a,b)->(int64 a.[0]*2L,int64 a.[1]),b|>Seq.map int64
+|> fun ((n,m),A) ->
+    [for i in [1L..m] do 
+        yield A|>Seq.map (fun Aj -> 1. - (wfmd2 n Aj i 1L)|>log10)] 
+|> List.map (fun l ->
+    l|>Seq.map string |>String.concat " ")
+|> List.iter (printfn "%s")
+      
 
 [<EntryPoint>]
 let main argv = 

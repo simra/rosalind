@@ -114,14 +114,16 @@ let findAllSubstrings (s:string) (candidate:string) =
                     if i'<0 then None
 
                     else Some(i',i')) -1
-    |> fun sq -> eprintfn "%s: %A" candidate sq; sq
+    |> fun sq -> 
+        //eprintfn "%s: %A" candidate sq; 
+        sq
 
-let validateIsMRep (s:string) positions =
+let validateIsMRep (s:string) (len:int) positions =
     seq {
         for i in positions do
             for j in positions do
                 if i<>j then
-                    if i=0 || j=0 || s.[i-1]<>s.[j-1] then yield i                    
+                    if (i=0 || j=0 || s.[i-1]<>s.[j-1]) && ((i+len)=s.Length || (j+len)=s.Length || s.[i+len]<>s.[j+len])  then yield i                    
     }
     |> fun s ->
         Seq.length s>0 
@@ -130,7 +132,7 @@ let validateIsMRep (s:string) positions =
 let filterStrings (s:string) (candidates:string seq) =
     candidates
     |> Seq.map (fun c -> c,findAllSubstrings s c) 
-    |> Seq.map (fun (c,positions) -> c,validateIsMRep s positions)
+    |> Seq.map (fun (c,positions) -> c,validateIsMRep s c.Length positions)
     |> Seq.filter (fun (c,valid)->valid)
     |> Seq.map (fun (c,valid)->c)
 
@@ -174,12 +176,14 @@ let doMrep() =
     input
     |> naiveMakeSuffixTree2
     |> mrep
-    |> fun s -> eprintfn "%A" s; s
+//    |> fun s -> eprintfn "%A" s; s
     |> Seq.filter (fun (c,s) -> s.Length>=20)
     |> Seq.map (fun (c,s)->s)
     |> filterStrings input
+    |> fun s -> eprintfn "Found %d" (Seq.length s); s
     |> Seq.iter (printfn "%s")
 
+doMrep()
 
 [<EntryPoint>]
 let main argv = 
