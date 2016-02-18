@@ -941,7 +941,7 @@ let rec getSubset =
                 |> List.map getSubset
                 |> String.concat ",")
 
-let taxaCount = memoize (fun mapping -> mapping|>Map.toSeq|>Seq.length)
+//let taxaCount = memoize (fun mapping -> mapping|>Map.toSeq|>Seq.length)
     
 let rec getCharacters (mapping:Map<string,int>) tree =
     
@@ -982,6 +982,18 @@ let complementTaxa taxa (inSet:string) =
     |> String.concat ","
 
 // functionally correct but too slow. [fixed with updated getchars]
+let qT1T2 taxa t1 t2 =
+    //let n=Map.toSeq taxa |> Seq.length
+    [|
+        getNonTrivialCharacters taxa t1
+        getNonTrivialCharacters taxa t2
+    |]
+    |> fun a ->
+        let c0 = Set.ofSeq a.[0]
+        a.[1]
+        |> Seq.map (fun s -> if (Set.contains s c0) || (Set.contains (complementTaxa taxa s) c0) then eprintfn "%A" s; 1 else 0)
+        |> Seq.sum
+
 getData "sptd"
 |> splitNewline
 |> List.ofArray
@@ -990,15 +1002,42 @@ getData "sptd"
     let n = head.Split(' ').Length
     tail
     |> Seq.map parseTree
-    |> Seq.map (getNonTrivialCharacters taxa)
+    |> Array.ofSeq
+    |> fun a ->
+        qT1T2 taxa a.[0] a.[1]
+ 
+ (*   |> Seq.map (getNonTrivialCharacters taxa)
     |> Array.ofSeq
     |> fun a ->
         let c0 = Set.ofSeq a.[0]
         a.[1]
         |> Seq.map (fun s -> if (Set.contains s c0) || (Set.contains (complementTaxa taxa s) c0) then 1 else 0)
-        |> Seq.sum
+        |> Seq.sum*)
         |> fun s-> 2*(n-3)-2*s
 |> printfn "%A"
+
+// qrtd
+// q(t1)+q(t2)-2*q(t1,t2)
+// q(t) == cntq(t)
+// q(t1,t2) = q(the tree build from common chars of t1,t2, which is close to sptd above)/
+let cntq n = 
+    n*(n-1L)*(n-2L)*(n-3L)/(24L)
+getData "qrtd"
+|> splitNewline
+|> List.ofArray
+|> fun (head::tail) ->
+    let taxa = head.Split(' ')|> Seq.mapi (fun i t -> (t,i))|>Map.ofSeq
+    let n = head.Split(' ').Length
+    tail
+    |> Seq.map parseTree
+    |> Array.ofSeq
+    |> fun a ->
+        qT1T2 taxa a.[0] a.[1]
+    |> fun s ->
+        eprintfn "qt1t2: %d" s
+        2L*(cntq (int64 n))-2L*(int64 s)
+    |> printfn "%d"
+
 
 
 [<EntryPoint>]
